@@ -1,0 +1,624 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>JCI · 左右压坡出帧 Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --cyan: #57d8ff;
+      --panel: rgba(7, 15, 23, .9);
+      --line: rgba(89, 185, 224, .28);
+      --muted: #7f97a7;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      color: #e8f6ff;
+      background: #04080e;
+      font: 13px system-ui, "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+    }
+    #stage {
+      position: relative;
+      min-height: 0;
+      background:
+        linear-gradient(45deg, #0a1218 25%, transparent 25%) 0 0 / 24px 24px,
+        linear-gradient(-45deg, #0a1218 25%, transparent 25%) 0 0 / 24px 24px,
+        linear-gradient(45deg, transparent 75%, #0a1218 75%) 0 0 / 24px 24px,
+        linear-gradient(-45deg, transparent 75%, #0a1218 75%) 0 0 / 24px 24px,
+        #061018;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    }
+    #view, #preview {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #preview { display: none; object-fit: contain; image-rendering: auto; }
+    #preview.on { display: block; }
+    #view.hide { visibility: hidden; pointer-events: none; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      z-index: 3;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .box {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 36px rgba(0,0,0,.35);
+    }
+    h1 { margin: 0; font-size: 16px; letter-spacing: .06em; }
+    h1 b { color: var(--cyan); }
+    .sub { margin-top: 4px; color: var(--muted); font: 11px/1.45 ui-monospace, Consolas, monospace; }
+    .readout {
+      min-width: 168px;
+      text-align: right;
+      color: #86a5b5;
+      font: 11px/1.7 ui-monospace, Consolas, monospace;
+    }
+    .readout b { color: #e8fbff; }
+    .dock {
+      z-index: 4;
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--line);
+      background: rgba(5, 11, 17, .96);
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .toolbar .grow { flex: 1; min-width: 120px; color: var(--muted); font: 11px ui-monospace, Consolas, monospace; }
+    button, select {
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid #355f74;
+      border-radius: 7px;
+      color: #d7eef7;
+      background: #122533;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.primary { color: #04131a; border-color: var(--cyan); background: var(--cyan); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    select { min-width: 96px; }
+    .strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .thumb {
+      flex: 0 0 auto;
+      width: 72px;
+      cursor: pointer;
+      border: 1px solid #2a4656;
+      border-radius: 8px;
+      background:
+        linear-gradient(45deg, #101820 25%, transparent 25%) 0 0 / 10px 10px,
+        linear-gradient(-45deg, #101820 25%, transparent 25%) 0 0 / 10px 10px,
+        #071018;
+      overflow: hidden;
+    }
+    .thumb.on { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+    .thumb img { display: block; width: 72px; height: 72px; object-fit: contain; }
+    .thumb span {
+      display: block;
+      padding: 3px 4px 5px;
+      color: #8fb0c0;
+      font: 10px ui-monospace, Consolas, monospace;
+      text-align: center;
+      background: rgba(0,0,0,.35);
+    }
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      display: grid;
+      place-items: center;
+      background: #04080e;
+      color: #9ec9da;
+      font: 12px ui-monospace, Consolas, monospace;
+      transition: opacity .28s;
+    }
+    .loading.done { opacity: 0; pointer-events: none; }
+    .progress {
+      width: min(280px, 70vw);
+      height: 4px;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #1a2d39;
+    }
+    .progress i {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="view"></div>
+    <canvas id="preview"></canvas>
+    <div class="hud">
+      <div class="box">
+        <h1>JCI <b>FRAMES</b></h1>
+        <div class="sub">3d66.com_jci54557246745.fbx<br />正俯视透明 PNG · ±60°</div>
+      </div>
+      <div class="box readout">
+        ROLL&nbsp; <b id="rollText">—</b><br />
+        FRAME <b id="frameText">—</b><br />
+        SIZE&nbsp; <b id="sizeText">1024²</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="dock">
+    <div class="toolbar">
+      <select id="count" title="帧数">
+        <option value="12">12 帧</option>
+        <option value="20" selected>20 帧</option>
+        <option value="24">24 帧</option>
+        <option value="36">36 帧</option>
+      </select>
+      <select id="size" title="分辨率">
+        <option value="512">512²</option>
+        <option value="1024" selected>1024²</option>
+        <option value="1536">1536²</option>
+      </select>
+      <select id="range" title="压坡范围">
+        <option value="40">±40°</option>
+        <option value="60" selected>±60°</option>
+        <option value="75">±75°</option>
+      </select>
+      <button id="bake" class="primary" disabled>出帧</button>
+      <button id="play" disabled>预览播放</button>
+      <button id="zip" disabled>下载 ZIP</button>
+      <button id="saveLocal" disabled>保存到 jci-frames</button>
+      <div class="grow" id="status">载入模型中…</div>
+    </div>
+    <div class="strip" id="strip"></div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div>
+      <div id="loadText">正在载入 FBX…</div>
+      <div class="progress"><i id="progress"></i></div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "jszip": "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+    import JSZip from "jszip";
+
+    const el = (id) => document.getElementById(id);
+    const view = el("view");
+    const preview = el("preview");
+    const previewCtx = preview.getContext("2d");
+    const strip = el("strip");
+    const status = el("status");
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04080e);
+
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 2000);
+    camera.position.set(0, 10, 0.001);
+    camera.up.set(0, 0, -1);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true,
+    });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x000000, 0);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    view.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 0, 0);
+
+    scene.add(new THREE.HemisphereLight(0xb7dcf0, 0x12181e, 1.35));
+    const key = new THREE.DirectionalLight(0xffffff, 2.8);
+    key.position.set(-5, 9, 7);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x55bbff, 2.0);
+    rim.position.set(7, 3.5, -5);
+    scene.add(rim);
+
+    const modelRoot = new THREE.Group();
+    scene.add(modelRoot);
+
+    let model = null;
+    let frames = [];
+    let selected = 0;
+    let playing = false;
+    let playDir = 1;
+    let playAcc = 0;
+    let liveRoll = 0;
+
+    function fitModel(object) {
+      object.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxSide = Math.max(size.x, size.y, size.z) || 1;
+      const scale = 6 / maxSide;
+      object.scale.setScalar(scale);
+      object.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+      object.updateMatrixWorld(true);
+      const fitted = new THREE.Box3().setFromObject(object);
+      const fittedCenter = fitted.getCenter(new THREE.Vector3());
+      object.position.y -= fittedCenter.y;
+      controls.target.set(0, 0, 0);
+      camera.position.set(0, 10, 0.001);
+      camera.up.set(0, 0, -1);
+      controls.update();
+    }
+
+    function setLiveRoll(deg) {
+      liveRoll = deg;
+      modelRoot.rotation.order = "YXZ";
+      modelRoot.rotation.set(0, 0, THREE.MathUtils.degToRad(deg));
+      el("rollText").textContent = `${deg >= 0 ? "+" : ""}${deg.toFixed(1)}°`;
+    }
+
+    function buildAngles(count, maxAbs) {
+      const n = Math.max(2, count | 0);
+      const angles = [];
+      for (let i = 0; i < n; i++) {
+        const t = n === 1 ? 0 : i / (n - 1);
+        angles.push(maxAbs - t * maxAbs * 2);
+      }
+      return angles;
+    }
+
+    function captureFrame(angle, px) {
+      const oldBackground = scene.background;
+      const oldRoot = modelRoot.rotation.clone();
+      const oldCamPos = camera.position.clone();
+      const oldCamUp = camera.up.clone();
+      const oldTarget = controls.target.clone();
+      const oldPixelRatio = renderer.getPixelRatio();
+      const oldSize = new THREE.Vector2();
+      renderer.getSize(oldSize);
+
+      scene.background = null;
+      modelRoot.rotation.order = "YXZ";
+      modelRoot.rotation.set(0, 0, THREE.MathUtils.degToRad(angle));
+      camera.position.set(0, 10, 0.001);
+      camera.up.set(0, 0, -1);
+      controls.target.set(0, 0, 0);
+      controls.update();
+      camera.aspect = 1;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(1);
+      renderer.setSize(px, px, false);
+      renderer.setClearColor(0x000000, 0);
+      renderer.render(scene, camera);
+      const dataUrl = renderer.domElement.toDataURL("image/png");
+
+      scene.background = oldBackground;
+      modelRoot.rotation.copy(oldRoot);
+      camera.position.copy(oldCamPos);
+      camera.up.copy(oldCamUp);
+      controls.target.copy(oldTarget);
+      renderer.setPixelRatio(oldPixelRatio);
+      renderer.setSize(oldSize.x, oldSize.y, false);
+      camera.aspect = oldSize.x / Math.max(1, oldSize.y);
+      camera.updateProjectionMatrix();
+      controls.update();
+      return dataUrl;
+    }
+
+    function showPreviewFrame(index) {
+      if (!frames.length) return;
+      selected = Math.max(0, Math.min(frames.length - 1, index));
+      const frame = frames[selected];
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      const w = preview.clientWidth || 1;
+      const h = preview.clientHeight || 1;
+      preview.width = Math.floor(w * dpr);
+      preview.height = Math.floor(h * dpr);
+      previewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      previewCtx.clearRect(0, 0, w, h);
+      const side = Math.min(w, h) * 0.82;
+      const x = (w - side) / 2;
+      const y = (h - side) / 2;
+      previewCtx.drawImage(frame.img, x, y, side, side);
+      el("rollText").textContent = `${frame.roll >= 0 ? "+" : ""}${frame.roll.toFixed(1)}°`;
+      el("frameText").textContent = `${String(selected).padStart(2, "0")} / ${String(frames.length - 1).padStart(2, "0")}`;
+      [...strip.children].forEach((node, i) => node.classList.toggle("on", i === selected));
+    }
+
+    function renderStrip() {
+      strip.innerHTML = "";
+      frames.forEach((frame, index) => {
+        const node = document.createElement("button");
+        node.type = "button";
+        node.className = "thumb" + (index === selected ? " on" : "");
+        node.innerHTML = `<img alt="" /><span>${String(index).padStart(2, "0")} · ${frame.roll >= 0 ? "+" : ""}${frame.roll.toFixed(0)}°</span>`;
+        node.querySelector("img").src = frame.dataUrl;
+        node.onclick = () => {
+          playing = false;
+          el("play").textContent = "预览播放";
+          showPreviewFrame(index);
+        };
+        strip.appendChild(node);
+      });
+    }
+
+    async function bakeFrames() {
+      if (!model) return;
+      const count = +el("count").value;
+      const px = +el("size").value;
+      const maxAbs = +el("range").value;
+      const angles = buildAngles(count, maxAbs);
+      el("bake").disabled = true;
+      el("play").disabled = true;
+      el("zip").disabled = true;
+      el("saveLocal").disabled = true;
+      playing = false;
+      el("play").textContent = "预览播放";
+      el("sizeText").textContent = `${px}²`;
+      frames = [];
+      strip.innerHTML = "";
+
+      for (let i = 0; i < angles.length; i++) {
+        const roll = angles[i];
+        status.textContent = `出帧中 ${i + 1}/${angles.length} · ${roll >= 0 ? "+" : ""}${roll.toFixed(1)}°`;
+        el("frameText").textContent = `${String(i).padStart(2, "0")} / ${String(angles.length - 1).padStart(2, "0")}`;
+        setLiveRoll(roll);
+        // 让 UI 有机会刷新
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const dataUrl = captureFrame(roll, px);
+        const img = new Image();
+        img.src = dataUrl;
+        await img.decode();
+        const name = `frame-${String(i).padStart(2, "0")}.png`;
+        frames.push({ index: i, roll, name, dataUrl, img });
+      }
+
+      view.classList.add("hide");
+      preview.classList.add("on");
+      selected = 0;
+      renderStrip();
+      showPreviewFrame(0);
+      el("bake").disabled = false;
+      el("play").disabled = false;
+      el("zip").disabled = false;
+      el("saveLocal").disabled = false;
+      status.textContent = `完成 ${frames.length} 帧 · 透明 PNG ${px}×${px} · ±${maxAbs}°`;
+    }
+
+    async function downloadZip() {
+      if (!frames.length) return;
+      status.textContent = "打包 ZIP…";
+      const zip = new JSZip();
+      const folder = zip.folder("jci-frames");
+      const meta = {
+        count: frames.length,
+        range: [frames[0].roll, frames[frames.length - 1].roll],
+        size: [+el("size").value, +el("size").value],
+        source: "jci54557246745.fbx",
+        frames: frames.map((f) => ({ index: f.index, roll: f.roll, file: f.name })),
+      };
+      folder.file("frames.json", JSON.stringify(meta, null, 2));
+      for (const frame of frames) {
+        const base64 = frame.dataUrl.split(",", 1)[1] || frame.dataUrl.split(",")[1];
+        folder.file(frame.name, base64, { base64: true });
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "jci-bank-frames.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      status.textContent = `已下载 ZIP · ${frames.length} 帧`;
+    }
+
+    async function saveLocal() {
+      if (!frames.length) return false;
+      status.textContent = "写入本地 jci-frames…";
+      let ok = 0;
+      try {
+        for (const frame of frames) {
+          const res = await fetch("http://127.0.0.1:8770/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: frame.name, data: frame.dataUrl }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          ok++;
+          status.textContent = `写入本地 ${ok}/${frames.length}`;
+        }
+        const meta = {
+          count: frames.length,
+          range: [frames[0].roll, frames[frames.length - 1].roll],
+          size: [+el("size").value, +el("size").value],
+          source: "jci54557246745.fbx",
+          frames: frames.map((f) => ({ index: f.index, roll: f.roll, file: f.name })),
+        };
+        await fetch("http://127.0.0.1:8770/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "frames.json",
+            data: "data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(meta, null, 2)))),
+          }),
+        });
+        status.textContent = `已保存到 tools/jci-frames · ${frames.length} 帧`;
+        return true;
+      } catch (err) {
+        console.error(err);
+        status.textContent = "本地保存失败：先运行 python tools/JCI-frame-save-server.py";
+        return false;
+      }
+    }
+
+    const AUTO =
+      new URLSearchParams(location.search).get("auto") === "save" ||
+      location.hash === "#autosave";
+    window.__JCIReady = false;
+    window.__JCIExportDone = false;
+    window.__JCIExportError = "";
+    window.__JCIExporting = false;
+
+    async function runAutoExport() {
+      if (window.__JCIExporting || window.__JCIExportDone) return window.__JCIExportDone;
+      window.__JCIExporting = true;
+      try {
+        el("count").value = "20";
+        el("size").value = "1024";
+        el("range").value = "60";
+        await bakeFrames();
+        const saved = await saveLocal();
+        if (!saved) throw new Error("saveLocal failed");
+        window.__JCIExportDone = true;
+        document.title = "JCI_EXPORT_DONE";
+        status.textContent = `自动出帧完成 · ${frames.length}`;
+        return true;
+      } catch (err) {
+        console.error(err);
+        window.__JCIExportError = String(err && err.message || err);
+        document.title = "JCI_EXPORT_FAIL";
+        status.textContent = "自动出帧失败";
+        return false;
+      } finally {
+        window.__JCIExporting = false;
+      }
+    }
+    window.runAutoExport = runAutoExport;
+
+    new FBXLoader().load(
+      "./models/jci54557246745.fbx",
+      (object) => {
+        model = object;
+        let meshes = 0;
+        object.traverse((node) => {
+          if (!node.isMesh) return;
+          meshes++;
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          for (const material of materials) {
+            if (!material) continue;
+            material.side = THREE.DoubleSide;
+            material.needsUpdate = true;
+          }
+        });
+        fitModel(object);
+        modelRoot.add(object);
+        el("progress").style.width = "100%";
+        el("loadText").textContent = `载入完成 · ${meshes} meshes`;
+        setTimeout(() => el("loading").classList.add("done"), 160);
+        el("bake").disabled = false;
+        status.textContent = "就绪 · 选帧数后点「出帧」";
+        setLiveRoll(0);
+        el("frameText").textContent = "—";
+        window.__JCIReady = true;
+        if (AUTO) setTimeout(() => runAutoExport(), 400);
+      },
+      (event) => {
+        if (!event.total) {
+          el("loadText").textContent = `载入中 · ${(event.loaded / 1024 / 1024).toFixed(1)} MB`;
+          return;
+        }
+        const percent = Math.min(100, event.loaded / event.total * 100);
+        el("progress").style.width = `${percent}%`;
+        el("loadText").textContent = `载入中 · ${percent.toFixed(0)}%`;
+      },
+      (error) => {
+        console.error(error);
+        el("loadText").textContent = "模型载入失败";
+        status.textContent = "FBX 载入失败";
+        window.__JCIExportError = String(error && error.message || error);
+        document.title = "JCI_EXPORT_FAIL";
+      }
+    );
+
+    el("bake").onclick = () => bakeFrames();
+    el("zip").onclick = () => downloadZip();
+    el("saveLocal").onclick = () => saveLocal();
+    el("play").onclick = () => {
+      if (!frames.length) return;
+      playing = !playing;
+      el("play").textContent = playing ? "暂停预览" : "预览播放";
+      playAcc = 0;
+    };
+
+    function resize() {
+      const width = view.clientWidth || 1;
+      const height = view.clientHeight || 1;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+      if (frames.length) showPreviewFrame(selected);
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    let previous = performance.now();
+    function loop(now) {
+      const dt = Math.min((now - previous) / 1000, 0.05);
+      previous = now;
+      if (!frames.length) {
+        if (!AUTO) {
+          // 出帧前轻微左右摆，方便确认模型姿态
+          const t = now * 0.001;
+          setLiveRoll(Math.sin(t * 0.9) * 35);
+        }
+        controls.update();
+        renderer.render(scene, camera);
+      } else if (playing) {
+        playAcc += dt * 10;
+        while (playAcc >= 1) {
+          playAcc -= 1;
+          selected += playDir;
+          if (selected >= frames.length - 1) {
+            selected = frames.length - 1;
+            playDir = -1;
+          } else if (selected <= 0) {
+            selected = 0;
+            playDir = 1;
+          }
+        }
+        showPreviewFrame(selected);
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nimi 生图台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #1a1410;
+      --paper: #f3ebe0;
+      --wash: #e6d5c0;
+      --ember: #c45c26;
+      --ember-deep: #8f3a12;
+      --line: rgba(26, 20, 16, 0.14);
+      --muted: rgba(26, 20, 16, 0.62);
+      --panel: rgba(255, 250, 243, 0.78);
+      --ok: #2f6b4f;
+      --bad: #a12c2c;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "IBM Plex Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 700px at 10% -10%, #fff6ea 0%, transparent 55%),
+        radial-gradient(900px 600px at 100% 0%, #d9c4a8 0%, transparent 50%),
+        linear-gradient(165deg, #efe2d2 0%, #dcc7ad 48%, #cbb59a 100%);
+      min-height: 100%;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.35;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.45'/%3E%3C/svg%3E");
+      mix-blend-mode: multiply;
+    }
+
+    .wrap {
+      position: relative;
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 40px 20px 64px;
+    }
+
+    header {
+      margin-bottom: 28px;
+      animation: rise 0.7s ease both;
+    }
+    .brand {
+      font-family: Syne, sans-serif;
+      font-weight: 800;
+      font-size: clamp(2.4rem, 6vw, 3.6rem);
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      margin: 0 0 10px;
+    }
+    .brand span { color: var(--ember); }
+    .tag {
+      margin: 0;
+      max-width: 36rem;
+      color: var(--muted);
+      font-size: 1.02rem;
+      line-height: 1.45;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(280px, 420px) 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+    @media (max-width: 860px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+      padding: 18px;
+      animation: rise 0.8s ease both;
+      animation-delay: 0.08s;
+    }
+
+    label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 8px;
+    }
+
+    .field { margin-bottom: 14px; }
+
+    textarea, input, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: rgba(255, 252, 247, 0.9);
+      color: var(--ink);
+      font: inherit;
+      padding: 11px 12px;
+      outline: none;
+    }
+    textarea { min-height: 140px; resize: vertical; line-height: 1.45; }
+    textarea:focus, input:focus, select:focus {
+      border-color: rgba(196, 92, 38, 0.55);
+      box-shadow: 0 0 0 3px rgba(196, 92, 38, 0.12);
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .hint {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin: 4px 0 0;
+    }
+
+    .upload-box {
+      display: grid;
+      grid-template-columns: 78px 1fr auto;
+      align-items: center;
+      gap: 12px;
+      min-height: 96px;
+      padding: 10px;
+      border: 1px dashed rgba(26, 20, 16, 0.28);
+      background: rgba(255, 252, 247, 0.56);
+      cursor: pointer;
+      text-transform: none;
+      letter-spacing: 0;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .upload-box:hover,
+    .upload-box.drag {
+      border-color: var(--ember);
+      background: rgba(255, 248, 239, 0.9);
+    }
+    .upload-thumb {
+      width: 78px;
+      height: 74px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      background: var(--wash);
+      overflow: hidden;
+      color: var(--ember);
+      font-family: Syne, sans-serif;
+      font-size: 1.5rem;
+    }
+    .upload-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .upload-copy strong {
+      display: block;
+      color: var(--ink);
+      font-family: Syne, sans-serif;
+      font-size: 0.9rem;
+      margin-bottom: 4px;
+    }
+    .upload-copy span {
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.35;
+    }
+    .upload-clear {
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      font-family: inherit;
+      font-size: 0.78rem;
+    }
+    .upload-clear[hidden] { display: none; }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 6px;
+    }
+
+    button {
+      font-family: Syne, sans-serif;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      padding: 12px 18px;
+      transition: transform 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+    }
+    button:active { transform: translateY(1px); }
+    button:disabled { opacity: 0.55; cursor: wait; }
+
+    .btn-primary {
+      background: var(--ember);
+      color: #fff8f2;
+      flex: 1;
+      min-width: 140px;
+    }
+    .btn-primary:hover:not(:disabled) { background: var(--ember-deep); }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--line);
+      color: var(--ink);
+    }
+
+    .status {
+      min-height: 1.3em;
+      margin-top: 12px;
+      font-size: 0.9rem;
+    }
+    .status.ok { color: var(--ok); }
+    .status.err { color: var(--bad); }
+
+    .stage {
+      min-height: 420px;
+      background:
+        linear-gradient(180deg, rgba(255,250,243,0.55), rgba(230,213,192,0.35)),
+        repeating-linear-gradient(
+          -12deg,
+          transparent,
+          transparent 14px,
+          rgba(26, 20, 16, 0.03) 14px,
+          rgba(26, 20, 16, 0.03) 15px
+        );
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      padding: 16px;
+      position: relative;
+      overflow: hidden;
+      animation: rise 0.85s ease both;
+      animation-delay: 0.14s;
+    }
+
+    .stage.empty::after {
+      content: "生成结果会出现在这里";
+      color: var(--muted);
+      font-family: Syne, sans-serif;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    .stage img {
+      max-width: 100%;
+      max-height: min(72vh, 720px);
+      display: block;
+      box-shadow: 0 18px 50px rgba(26, 20, 16, 0.18);
+      animation: fadeIn 0.45s ease both;
+    }
+
+    .revised {
+      margin-top: 12px;
+      font-size: 0.86rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+      font-size: 0.82rem;
+      color: var(--muted);
+    }
+
+    .spinner {
+      width: 42px;
+      height: 42px;
+      border: 3px solid rgba(26, 20, 16, 0.12);
+      border-top-color: var(--ember);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    details.adv {
+      margin-top: 8px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+    details.adv summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--muted);
+      list-style: none;
+    }
+    details.adv summary::-webkit-details-marker { display: none; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: none; }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.985); }
+      to { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1 class="brand">Nimi <span>生图台</span></h1>
+      <p class="tag">本地代理调用 OpenAI 图像接口。Key 存在本机 <code>.env</code>，不会进仓库。</p>
+    </header>
+
+    <div class="grid">
+      <form class="panel" id="form">
+        <div class="field">
+          <label for="prompt">提示词</label>
+          <textarea id="prompt" placeholder="例如：俯视科幻空战，橙红引擎尾焰，深灰机体，清晰剪影，游戏概念图" required></textarea>
+        </div>
+
+        <div class="field">
+          <label>参考图（可选）</label>
+          <label class="upload-box" id="uploadBox" for="referenceImage">
+            <span class="upload-thumb" id="uploadThumb">＋</span>
+            <span class="upload-copy">
+              <strong id="uploadTitle">上传参考图</strong>
+              <span id="uploadHint">PNG / JPG / WebP，最大 20MB；上传后会按提示词修改此图</span>
+            </span>
+            <button class="upload-clear" type="button" id="uploadClear" hidden>移除</button>
+          </label>
+          <input id="referenceImage" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+        </div>
+
+        <div class="row">
+          <div class="field">
+            <label for="model">模型</label>
+            <select id="model">
+              <option value="gpt-image-1-mini" selected>gpt-image-1-mini（快/便宜）</option>
+              <option value="gpt-image-1.5">gpt-image-1.5</option>
+              <option value="gpt-image-2">gpt-image-2</option>
+              <option value="chatgpt-image-latest">chatgpt-image-latest</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="size">尺寸</label>
+            <select id="size">
+              <option value="1024x1024" selected>1024×1024</option>
+              <option value="1536x1024">1536×1024 横</option>
+              <option value="1024x1536">1024×1536 竖</option>
+              <option value="1792x1024">1792×1024（dall-e-3）</option>
+              <option value="1024x1792">1024×1792（dall-e-3）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row" id="qualRow">
+          <div class="field">
+            <label for="quality">画质</label>
+            <select id="quality">
+              <option value="auto" selected>auto</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="standard">standard（dall-e-3）</option>
+              <option value="hd">hd（dall-e-3）</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>&nbsp;</label>
+            <p class="hint">你的 Key 可用 gpt-image-1-mini / 1.5 / 2</p>
+          </div>
+        </div>
+
+        <details class="adv">
+          <summary>高级：临时覆盖 API Key</summary>
+          <div class="field" style="margin-top:12px">
+            <label for="apiKey">API Key（可选，默认用服务器 .env）</label>
+            <input id="apiKey" type="password" autocomplete="off" placeholder="留空则使用本地 .env" />
+            <p class="hint" id="keyHint">检测中…</p>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button class="btn-primary" type="submit" id="go">生成</button>
+          <button class="btn-ghost" type="button" id="download" disabled>下载</button>
+        </div>
+        <div class="status" id="status"></div>
+      </form>
+
+      <div>
+        <div class="stage empty" id="stage"></div>
+        <p class="revised" id="revised" hidden></p>
+        <div class="meta">
+          <span id="metaLeft"></span>
+          <span id="metaRight"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const form = $('form');
+    const stage = $('stage');
+    const statusEl = $('status');
+    const downloadBtn = $('download');
+    const modelSel = $('model');
+    const sizeSel = $('size');
+    const referenceInput = $('referenceImage');
+    const uploadBox = $('uploadBox');
+    let lastObjectUrl = null;
+    let lastBlob = null;
+    let referenceBase64 = null;
+    let referenceMime = null;
+
+    const GPT_SIZES = ['1024x1024', '1536x1024', '1024x1536'];
+    const D3_SIZES = ['1024x1024', '1792x1024', '1024x1792'];
+
+    function syncSizeOptions() {
+      const isD3 = modelSel.value === 'dall-e-3';
+      const sizes = isD3 ? D3_SIZES : GPT_SIZES;
+      const cur = sizeSel.value;
+      sizeSel.innerHTML = sizes.map((s) => {
+        const label = s.replace('x', '×');
+        return `<option value="${s}">${label}</option>`;
+      }).join('');
+      sizeSel.value = sizes.includes(cur) ? cur : sizes[0];
+    }
+
+    modelSel.addEventListener('change', syncSizeOptions);
+    syncSizeOptions();
+
+    function setReferenceFile(file) {
+      if (!file) return;
+      const allowed = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!allowed.includes(file.type)) {
+        setStatus('参考图仅支持 PNG、JPG、WebP', 'err');
+        return;
+      }
+      if (file.size > 20 * 1024 * 1024) {
+        setStatus('参考图不能超过 20MB', 'err');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = String(reader.result || '');
+        referenceBase64 = dataUrl.split(',')[1] || null;
+        referenceMime = file.type;
+        $('uploadThumb').innerHTML = `<img src="${dataUrl}" alt="参考图预览">`;
+        $('uploadTitle').textContent = file.name;
+        $('uploadHint').textContent = `${(file.size / 1024 / 1024).toFixed(2)} MB · 将使用图片编辑模式`;
+        $('uploadClear').hidden = false;
+        $('go').textContent = '按参考图生成';
+        setStatus('参考图已载入', 'ok');
+      };
+      reader.onerror = () => setStatus('参考图读取失败', 'err');
+      reader.readAsDataURL(file);
+    }
+
+    function clearReference() {
+      referenceInput.value = '';
+      referenceBase64 = null;
+      referenceMime = null;
+      $('uploadThumb').textContent = '＋';
+      $('uploadTitle').textContent = '上传参考图';
+      $('uploadHint').textContent = 'PNG / JPG / WebP，最大 20MB；上传后会按提示词修改此图';
+      $('uploadClear').hidden = true;
+      $('go').textContent = '生成';
+    }
+
+    referenceInput.addEventListener('change', () => setReferenceFile(referenceInput.files[0]));
+    $('uploadClear').addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearReference();
+    });
+    ['dragenter', 'dragover'].forEach((name) => {
+      uploadBox.addEventListener(name, (e) => {
+        e.preventDefault();
+        uploadBox.classList.add('drag');
+      });
+    });
+    ['dragleave', 'drop'].forEach((name) => {
+      uploadBox.addEventListener(name, (e) => {
+        e.preventDefault();
+        uploadBox.classList.remove('drag');
+      });
+    });
+    uploadBox.addEventListener('drop', (e) => setReferenceFile(e.dataTransfer.files[0]));
+
+    async function refreshHealth() {
+      try {
+        const r = await fetch('/api/health');
+        const j = await r.json();
+        $('keyHint').textContent = j.hasKey
+          ? `服务器已加载 Key：${j.keyHint}`
+          : '服务器未配置 Key，请在下方填写或编辑 tools/image-gen/.env';
+      } catch {
+        $('keyHint').textContent = '无法连接本地服务，请先运行 node server.js';
+      }
+    }
+    refreshHealth();
+
+    function setStatus(text, kind) {
+      statusEl.textContent = text || '';
+      statusEl.className = 'status' + (kind ? ' ' + kind : '');
+    }
+
+    function showLoading() {
+      stage.classList.remove('empty');
+      stage.innerHTML = '<div class="spinner" aria-label="生成中"></div>';
+      $('revised').hidden = true;
+      downloadBtn.disabled = true;
+    }
+
+    function showImage(src) {
+      stage.classList.remove('empty');
+      stage.innerHTML = '';
+      const img = document.createElement('img');
+      img.alt = '生成结果';
+      img.src = src;
+      stage.appendChild(img);
+      downloadBtn.disabled = false;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const prompt = $('prompt').value.trim();
+      if (!prompt) return;
+
+      showLoading();
+      setStatus(referenceBase64
+        ? '正在依据参考图生成，通常 20–90 秒…'
+        : '请求 OpenAI 中，通常 10–40 秒…');
+      $('go').disabled = true;
+      $('metaLeft').textContent = '';
+      $('metaRight').textContent = '';
+
+      const started = Date.now();
+      try {
+        const body = {
+          prompt,
+          model: modelSel.value,
+          size: sizeSel.value,
+          quality: $('quality').value,
+        };
+        if (referenceBase64) {
+          body.imageBase64 = referenceBase64;
+          body.imageMime = referenceMime;
+        }
+        const override = $('apiKey').value.trim();
+        if (override) body.apiKey = override;
+
+        const r = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+
+        if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
+        lastObjectUrl = null;
+        lastBlob = null;
+
+        let src;
+        if (j.b64) {
+          const bin = atob(j.b64);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          lastBlob = new Blob([bytes], { type: 'image/png' });
+          lastObjectUrl = URL.createObjectURL(lastBlob);
+          src = lastObjectUrl;
+        } else if (j.url) {
+          src = j.url;
+        } else {
+          throw new Error('没有图片数据');
+        }
+
+        showImage(src);
+        const sec = ((Date.now() - started) / 1000).toFixed(1);
+        setStatus(`完成 · ${sec}s`, 'ok');
+        $('metaLeft').textContent = `${j.model} · ${j.size} · ${j.mode === 'edit' ? '参考图编辑' : '文字生成'}`;
+        $('metaRight').textContent = new Date().toLocaleTimeString();
+        if (j.revised_prompt) {
+          $('revised').hidden = false;
+          $('revised').textContent = '模型改写提示词：' + j.revised_prompt;
+        }
+      } catch (err) {
+        stage.classList.add('empty');
+        stage.innerHTML = '';
+        setStatus(err.message || String(err), 'err');
+      } finally {
+        $('go').disabled = false;
+      }
+    });
+
+    downloadBtn.addEventListener('click', () => {
+      if (!lastBlob && !lastObjectUrl) return;
+      const a = document.createElement('a');
+      a.download = `nimi-${Date.now()}.png`;
+      if (lastBlob) {
+        a.href = URL.createObjectURL(lastBlob);
+      } else {
+        a.href = lastObjectUrl;
+      }
+      a.click();
+    });
+  </script>
+</body>
+</html>

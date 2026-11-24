@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>JGI54550819259 · 左右压坡 Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --cyan: #57d8ff;
+      --panel: rgba(7, 15, 23, .88);
+      --line: rgba(89, 185, 224, .28);
+      --muted: #7f97a7;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      color: #e8f6ff;
+      background: #04080e;
+      font: 13px system-ui, "Microsoft YaHei", sans-serif;
+    }
+    #view { position: fixed; inset: 0; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .top {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      z-index: 2;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .box {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 36px rgba(0,0,0,.35);
+    }
+    h1 { margin: 0; font-size: 17px; letter-spacing: .06em; }
+    h1 b { color: var(--cyan); }
+    .sub { margin-top: 4px; color: var(--muted); font: 11px/1.45 ui-monospace, Consolas, monospace; }
+    .readout {
+      min-width: 168px;
+      text-align: right;
+      color: #86a5b5;
+      font: 11px/1.7 ui-monospace, Consolas, monospace;
+    }
+    .readout b { color: #e8fbff; }
+    .panel {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      z-index: 2;
+      width: min(560px, calc(100vw - 24px));
+      padding: 14px 16px;
+      transform: translateX(-50%);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 14px 40px rgba(0,0,0,.4);
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .row:first-child { margin-top: 0; }
+    label {
+      min-width: 64px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .04em;
+    }
+    output {
+      min-width: 52px;
+      color: var(--cyan);
+      font: 11px ui-monospace, Consolas, monospace;
+      text-align: right;
+    }
+    input[type="range"] {
+      appearance: none;
+      flex: 1;
+      height: 5px;
+      border-radius: 6px;
+      background: #20333f;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border: 2px solid #061019;
+      border-radius: 50%;
+      background: var(--cyan);
+      cursor: pointer;
+    }
+    .buttons { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+    button {
+      height: 34px;
+      border: 1px solid #355f74;
+      border-radius: 7px;
+      color: #d7eef7;
+      background: #122533;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.on { color: #04131a; border-color: var(--cyan); background: var(--cyan); }
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: grid;
+      place-items: center;
+      background: #04080e;
+      color: #9ec9da;
+      font: 12px ui-monospace, Consolas, monospace;
+      transition: opacity .28s;
+    }
+    .loading.done { opacity: 0; pointer-events: none; }
+    .progress {
+      width: min(280px, 70vw);
+      height: 4px;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #1a2d39;
+    }
+    .progress i {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+    .hint {
+      position: fixed;
+      right: 16px;
+      bottom: 110px;
+      z-index: 2;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      color: var(--muted);
+      background: rgba(6,12,18,.82);
+      font-size: 11px;
+      pointer-events: none;
+    }
+    @media (max-width: 640px) {
+      .top { top: 8px; left: 8px; right: 8px; }
+      .buttons { grid-template-columns: 1fr 1fr; }
+      .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="view"></div>
+  <div class="loading" id="loading">
+    <div>
+      <div id="loadText">正在载入 FBX…</div>
+      <div class="progress"><i id="progress"></i></div>
+    </div>
+  </div>
+
+  <div class="top">
+    <div class="box">
+      <h1>JGI <b>BANK DEMO</b></h1>
+      <div class="sub">3d66.com_JGI54550819259.fbx<br />左右压坡 · ±60°</div>
+    </div>
+    <div class="box readout">
+      ROLL&nbsp; <b id="rollText">+0.0°</b><br />
+      MODE <b id="modeText">AUTO</b><br />
+      MESH <b id="meshText">—</b>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="row">
+      <label>压坡角</label>
+      <input id="roll" type="range" min="-60" max="60" value="0" step="0.1" />
+      <output id="rollOut">0.0°</output>
+    </div>
+    <div class="row">
+      <label>摆动速</label>
+      <input id="speed" type="range" min="0.2" max="2.5" value="0.85" step="0.05" />
+      <output id="speedOut">0.85x</output>
+    </div>
+    <div class="buttons">
+      <button id="auto" class="on">自动左右</button>
+      <button id="pause">暂停</button>
+      <button id="top">正俯视</button>
+      <button id="reset">复位</button>
+    </div>
+  </div>
+  <div class="hint">左键旋转 · 滚轮缩放 · 右键平移</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+
+    const el = (id) => document.getElementById(id);
+    const view = el("view");
+    const loading = el("loading");
+    const loadText = el("loadText");
+    const progress = el("progress");
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04080e);
+    scene.fog = new THREE.FogExp2(0x04080e, 0.02);
+
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 2000);
+    camera.position.set(7.2, 4.6, 8.2);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    view.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.07;
+    controls.target.set(0, 0.2, 0);
+
+    scene.add(new THREE.HemisphereLight(0xb7dcf0, 0x12181e, 1.35));
+    const key = new THREE.DirectionalLight(0xffffff, 2.8);
+    key.position.set(-5, 9, 7);
+    key.castShadow = true;
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x55bbff, 2.0);
+    rim.position.set(7, 3.5, -5);
+    scene.add(rim);
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(14, 96),
+      new THREE.MeshStandardMaterial({ color: 0x0b151d, metalness: 0.12, roughness: 0.9 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -2.2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const grid = new THREE.GridHelper(28, 28, 0x2f6680, 0x152934);
+    grid.position.y = -2.19;
+    scene.add(grid);
+
+    const modelRoot = new THREE.Group();
+    scene.add(modelRoot);
+
+    let model = null;
+    let autoBank = true;
+    let paused = false;
+    let bankPhase = 0;
+    let manualRoll = 0;
+    const BANK_MAX = 60;
+
+    function fitModel(object) {
+      object.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxSide = Math.max(size.x, size.y, size.z) || 1;
+      const scale = 6 / maxSide;
+      object.scale.setScalar(scale);
+      object.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+      object.updateMatrixWorld(true);
+
+      const fitted = new THREE.Box3().setFromObject(object);
+      const fittedCenter = fitted.getCenter(new THREE.Vector3());
+      object.position.y -= fittedCenter.y;
+      floor.position.y = fitted.min.y - 0.12;
+      grid.position.y = fitted.min.y - 0.11;
+      controls.target.set(0, 0.15, 0);
+      camera.position.set(7.2, 4.6, 8.2);
+      controls.update();
+    }
+
+    function setRollDeg(deg) {
+      manualRoll = THREE.MathUtils.clamp(deg, -BANK_MAX, BANK_MAX);
+      modelRoot.rotation.order = "YXZ";
+      modelRoot.rotation.z = THREE.MathUtils.degToRad(manualRoll);
+      el("roll").value = String(manualRoll.toFixed(1));
+      el("rollOut").textContent = `${manualRoll >= 0 ? "+" : ""}${manualRoll.toFixed(1)}°`;
+      el("rollText").textContent = `${manualRoll >= 0 ? "+" : ""}${manualRoll.toFixed(1)}°`;
+    }
+
+    new FBXLoader().load(
+      "./models/jgi54550819259.fbx",
+      (object) => {
+        model = object;
+        let meshes = 0;
+        let triangles = 0;
+        object.traverse((node) => {
+          if (!node.isMesh) return;
+          meshes++;
+          node.castShadow = true;
+          node.receiveShadow = true;
+          const geometry = node.geometry;
+          triangles += geometry.index
+            ? geometry.index.count / 3
+            : geometry.attributes.position.count / 3;
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          for (const material of materials) {
+            if (!material) continue;
+            material.side = THREE.DoubleSide;
+            material.needsUpdate = true;
+          }
+        });
+        fitModel(object);
+        modelRoot.add(object);
+        progress.style.width = "100%";
+        el("meshText").textContent = `${meshes} / ${Math.round(triangles / 1000)}k`;
+        loadText.textContent = `载入完成 · ${meshes} meshes`;
+        setTimeout(() => loading.classList.add("done"), 180);
+        setRollDeg(0);
+      },
+      (event) => {
+        if (!event.total) {
+          loadText.textContent = `载入中 · ${(event.loaded / 1024 / 1024).toFixed(1)} MB`;
+          return;
+        }
+        const percent = Math.min(100, event.loaded / event.total * 100);
+        progress.style.width = `${percent}%`;
+        loadText.textContent = `载入中 · ${percent.toFixed(0)}%`;
+      },
+      (error) => {
+        console.error(error);
+        loadText.textContent = "模型载入失败，请用本地静态服务打开本页";
+        progress.style.background = "#ff6376";
+      }
+    );
+
+    el("roll").addEventListener("input", () => {
+      autoBank = false;
+      el("auto").classList.remove("on");
+      el("modeText").textContent = "MANUAL";
+      setRollDeg(+el("roll").value);
+    });
+    el("speed").addEventListener("input", () => {
+      el("speedOut").textContent = `${(+el("speed").value).toFixed(2)}x`;
+    });
+
+    el("auto").onclick = () => {
+      autoBank = !autoBank;
+      el("auto").classList.toggle("on", autoBank);
+      el("modeText").textContent = autoBank ? "AUTO" : "MANUAL";
+      if (autoBank) paused = false;
+    };
+    el("pause").onclick = () => {
+      paused = !paused;
+      el("pause").classList.toggle("on", paused);
+      el("pause").textContent = paused ? "继续" : "暂停";
+    };
+    el("top").onclick = () => {
+      camera.position.set(0, 10, 0.001);
+      camera.up.set(0, 0, -1);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    };
+    el("reset").onclick = () => {
+      bankPhase = 0;
+      paused = false;
+      autoBank = true;
+      el("auto").classList.add("on");
+      el("pause").classList.remove("on");
+      el("pause").textContent = "暂停";
+      el("modeText").textContent = "AUTO";
+      el("speed").value = "0.85";
+      el("speedOut").textContent = "0.85x";
+      camera.up.set(0, 1, 0);
+      camera.position.set(7.2, 4.6, 8.2);
+      controls.target.set(0, 0.15, 0);
+      controls.update();
+      setRollDeg(0);
+    };
+
+    function resize() {
+      const width = view.clientWidth || 1;
+      const height = view.clientHeight || 1;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    let previous = performance.now();
+    function loop(now) {
+      const dt = Math.min((now - previous) / 1000, 0.05);
+      previous = now;
+      if (model && autoBank && !paused) {
+        const speed = +el("speed").value;
+        bankPhase += dt * speed;
+        // 平滑三角波：左满舵 ↔ 右满舵，首尾不跳变
+        const cycle = bankPhase % 2;
+        const t = cycle <= 1 ? cycle : 2 - cycle;
+        const eased = 0.5 - 0.5 * Math.cos(t * Math.PI);
+        setRollDeg((eased * 2 - 1) * BANK_MAX);
+      }
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

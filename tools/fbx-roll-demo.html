@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>FBX Roll 帧动画 Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --cyan: #57d8ff;
+      --panel: rgba(7, 15, 23, .84);
+      --line: rgba(89, 185, 224, .25);
+      --muted: #7894a4;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { background: #03070c; color: #e5f5fc; font: 13px system-ui, "Microsoft YaHei", sans-serif; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .top {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      pointer-events: none;
+    }
+    .box {
+      padding: 11px 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 10px 35px rgba(0,0,0,.3);
+      backdrop-filter: blur(8px);
+    }
+    h1 { margin: 0; font-size: 17px; letter-spacing: .08em; }
+    h1 b { color: var(--cyan); }
+    .sub { margin-top: 3px; color: var(--muted); font: 10px ui-monospace, Consolas, monospace; }
+    .readout {
+      min-width: 170px;
+      text-align: right;
+      color: #82a0af;
+      font: 11px/1.7 ui-monospace, Consolas, monospace;
+    }
+    .readout b { color: #e4f7ff; }
+    .controls {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      width: min(540px, calc(100vw - 28px));
+      padding: 12px 14px;
+      transform: translateX(-50%);
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--panel);
+      box-shadow: 0 12px 35px rgba(0,0,0,.34);
+      backdrop-filter: blur(9px);
+    }
+    .row { display: flex; align-items: center; gap: 12px; }
+    label { color: var(--muted); font-size: 11px; font-weight: 700; }
+    input[type="range"] {
+      appearance: none;
+      flex: 1;
+      height: 5px;
+      border-radius: 6px;
+      background: #20333f;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border: 2px solid #061019;
+      border-radius: 50%;
+      background: var(--cyan);
+      cursor: pointer;
+    }
+    button {
+      height: 31px;
+      min-width: 78px;
+      border: 1px solid #39728b;
+      border-radius: 6px;
+      color: #031118;
+      background: var(--cyan);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .track {
+      position: relative;
+      height: 4px;
+      margin-top: 11px;
+      border-radius: 5px;
+      background: #1b303b;
+    }
+    .track i {
+      position: absolute;
+      top: -3px;
+      width: 2px;
+      height: 10px;
+      border-radius: 2px;
+      background: #dff8ff;
+      box-shadow: 0 0 9px var(--cyan);
+    }
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      display: grid;
+      place-items: center;
+      color: #8dc3d8;
+      background: #03070c;
+      font: 12px ui-monospace, monospace;
+      transition: opacity .3s;
+    }
+    .loading.done { opacity: 0; pointer-events: none; }
+    @media (max-width: 560px) {
+      .top { top: 8px; left: 8px; right: 8px; }
+      .readout { min-width: 135px; }
+      .controls { bottom: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="loading" id="loading">LOADING FRAMES · 0 / 20</div>
+
+  <div class="top">
+    <div class="box">
+      <h1>FBX <b>ROLL DEMO</b></h1>
+      <div class="sub">AUTO LOOP · +60° ↔ −60°</div>
+    </div>
+    <div class="box readout">
+      ROLL&nbsp; <b id="rollText">+60.0°</b><br />
+      FRAME <b id="frameText">00 / 19</b><br />
+      FPS&nbsp;&nbsp; <b id="fpsText">12</b>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="row">
+      <label>播放速度</label>
+      <input id="speed" type="range" min="4" max="24" value="12" />
+      <button id="toggle">暂停</button>
+    </div>
+    <div class="track"><i id="marker"></i></div>
+  </div>
+
+  <script>
+    const FRAMES = [
+      [60.0000, "frame-00.png"],
+      [53.6842, "frame-01.png"],
+      [47.3684, "frame-02.png"],
+      [41.0526, "frame-03.png"],
+      [34.7368, "frame-04.png"],
+      [28.4211, "frame-05.png"],
+      [22.1053, "frame-06.png"],
+      [15.7895, "frame-07.png"],
+      [9.4737, "frame-08.png"],
+      [3.1579, "frame-09.png"],
+      [-3.1579, "frame-10.png"],
+      [-9.4737, "frame-11.png"],
+      [-15.7895, "frame-12.png"],
+      [-22.1053, "frame-13.png"],
+      [-28.4211, "frame-14.png"],
+      [-34.7368, "frame-15.png"],
+      [-41.0526, "frame-16.png"],
+      [-47.3684, "frame-17.png"],
+      [-53.6842, "frame-18.png"],
+      [-60.0000, "frame-19.png"],
+    ];
+
+    const canvas = document.querySelector("#canvas");
+    const ctx = canvas.getContext("2d");
+    const loading = document.querySelector("#loading");
+    const speedInput = document.querySelector("#speed");
+    const toggle = document.querySelector("#toggle");
+    const rollText = document.querySelector("#rollText");
+    const frameText = document.querySelector("#frameText");
+    const fpsText = document.querySelector("#fpsText");
+    const marker = document.querySelector("#marker");
+    const images = new Array(FRAMES.length);
+
+    let width = 1;
+    let height = 1;
+    let dpr = 1;
+    let playing = true;
+    let playhead = 0;
+    let previous = performance.now();
+
+    function resize() {
+      width = innerWidth;
+      height = innerHeight;
+      dpr = Math.min(devicePixelRatio || 1, 2);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function drawBackground() {
+      const bg = ctx.createRadialGradient(
+        width * .5, height * .45, 0,
+        width * .5, height * .45, Math.max(width, height) * .75
+      );
+      bg.addColorStop(0, "#102434");
+      bg.addColorStop(.55, "#07131e");
+      bg.addColorStop(1, "#02060a");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.save();
+      ctx.translate(width * .5, height * .52);
+      ctx.strokeStyle = "rgba(75,160,194,.12)";
+      ctx.lineWidth = 1;
+      for (let i = -12; i <= 12; i++) {
+        ctx.beginPath();
+        ctx.moveTo(i * width * .026, -height * .5);
+        ctx.lineTo(i * width * .18, height * .5);
+        ctx.stroke();
+      }
+      for (let i = 0; i < 14; i++) {
+        const y = -height * .5 + Math.pow(i / 13, 1.9) * height;
+        ctx.beginPath();
+        ctx.moveTo(-width, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawFrame(position) {
+      const max = FRAMES.length - 1;
+      const clamped = Math.max(0, Math.min(max, position));
+      const index = Math.floor(clamped);
+      const next = Math.min(max, index + 1);
+      const mix = clamped - index;
+      const maxW = Math.min(width * .82, 820);
+      const maxH = Math.min(height * .72, 760);
+      const image = images[index];
+      if (!image) return;
+      const scale = Math.min(maxW / image.width, maxH / image.height);
+      const w = image.width * scale;
+      const h = image.height * scale;
+
+      ctx.save();
+      // 原模型机头朝下，播放时整体旋转 180°，让机头统一朝上。
+      ctx.translate(width / 2, height / 2);
+      ctx.rotate(Math.PI);
+      ctx.shadowColor = "rgba(45,154,218,.32)";
+      ctx.shadowBlur = 28;
+      ctx.globalAlpha = 1;
+      ctx.drawImage(image, -w / 2, -h / 2, w, h);
+      if (next !== index && images[next] && mix > .02) {
+        ctx.globalAlpha = mix;
+        ctx.drawImage(images[next], -w / 2, -h / 2, w, h);
+      }
+      ctx.restore();
+
+      const angle = FRAMES[index][0] + (FRAMES[next][0] - FRAMES[index][0]) * mix;
+      rollText.textContent = `${angle >= 0 ? "+" : ""}${angle.toFixed(1)}°`;
+      frameText.textContent = `${String(index).padStart(2, "0")} / 19`;
+      marker.style.left = `${clamped / max * 100}%`;
+    }
+
+    function loop(now) {
+      const dt = Math.min((now - previous) / 1000, .05);
+      previous = now;
+      const fps = +speedInput.value;
+      fpsText.textContent = String(fps);
+      if (playing) {
+        // 0→19→0 的三角波，首尾不会跳帧。
+        playhead = (playhead + dt * fps) % ((FRAMES.length - 1) * 2);
+      }
+      const position = playhead <= FRAMES.length - 1
+        ? playhead
+        : (FRAMES.length - 1) * 2 - playhead;
+      drawBackground();
+      drawFrame(position);
+      requestAnimationFrame(loop);
+    }
+
+    toggle.onclick = () => {
+      playing = !playing;
+      toggle.textContent = playing ? "暂停" : "播放";
+    };
+    addEventListener("resize", resize);
+    resize();
+
+    let loaded = 0;
+    Promise.all(FRAMES.map(([, file], index) => new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => {
+        images[index] = image;
+        loaded++;
+        loading.textContent = `LOADING FRAMES · ${loaded} / ${FRAMES.length}`;
+        resolve();
+      };
+      image.onerror = reject;
+      image.src = `./fbx-frames/${file}`;
+    }))).then(() => {
+      loading.classList.add("done");
+      requestAnimationFrame(loop);
+    }).catch(() => {
+      loading.textContent = "FRAME LOAD FAILED";
+    });
+  </script>
+</body>
+</html>

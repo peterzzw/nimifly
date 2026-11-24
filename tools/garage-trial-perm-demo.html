@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>机库 · 试飞权限 Demo</title>
+  <style>
+    :root {
+      --bg: #071018;
+      --panel: rgba(8, 16, 24, 0.92);
+      --line: rgba(120, 190, 230, 0.28);
+      --text: #e8f2f8;
+      --muted: #8aa0b0;
+      --own: #3ddc84;
+      --trial: #ffe08a;
+      --lock: #6a7a88;
+      --danger: #ff7a7a;
+      --accent: #7ad7ff;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-l: env(safe-area-inset-left, 0px);
+      --safe-r: env(safe-area-inset-right, 0px);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; width: 100%; height: 100%;
+      overflow: hidden;
+      background: #04080e;
+      color: var(--text);
+      font: 13px/1.45 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      user-select: none;
+    }
+    #stage {
+      position: fixed; inset: 0;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      padding: calc(10px + var(--safe-t)) calc(14px + var(--safe-r)) calc(10px + var(--safe-b)) calc(14px + var(--safe-l));
+      gap: 10px;
+      background:
+        radial-gradient(80% 60% at 70% 20%, rgba(50, 110, 150, 0.18), transparent 55%),
+        linear-gradient(180deg, #0a1620, #061018 60%, #04090e);
+    }
+    header {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    header h1 {
+      margin: 0; font-size: 17px; font-weight: 700; letter-spacing: 0.02em;
+    }
+    header h1 em { font-style: normal; color: var(--accent); font-size: 11px; margin-left: 8px; font-weight: 500; }
+    .spacer { flex: 1; }
+    .btn {
+      height: 32px; padding: 0 14px; border-radius: 8px;
+      border: 1px solid rgba(180,200,220,0.3);
+      background: rgba(255,255,255,0.06);
+      color: #d5e2ea; font-size: 12px; cursor: pointer;
+    }
+    .btn.primary {
+      border: none; background: rgba(60, 160, 110, 0.95); color: #06200a; font-weight: 700;
+    }
+    .btn.warn {
+      border-color: rgba(255, 210, 100, 0.45); color: var(--trial);
+      background: rgba(255, 200, 80, 0.1);
+    }
+    .btn:disabled {
+      opacity: 0.4; cursor: not-allowed;
+    }
+    .btn.ghost { background: transparent; }
+
+    .banner {
+      display: none;
+      align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 10px;
+      border: 1px solid rgba(255, 210, 100, 0.35);
+      background: rgba(40, 30, 8, 0.75);
+      color: #ffe9b0; font-size: 12px;
+    }
+    .banner.show { display: flex; }
+    .banner strong { color: var(--trial); }
+
+    .main {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(220px, 0.9fr) 1.2fr;
+      gap: 12px;
+    }
+    @media (max-width: 720px) {
+      .main { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 12px;
+      min-height: 0;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .preview {
+      position: relative;
+      flex: 1;
+      border-radius: 10px;
+      background:
+        radial-gradient(circle at 50% 40%, rgba(90,160,200,0.12), transparent 55%),
+        repeating-linear-gradient(0deg, transparent 0 23px, rgba(80,120,140,0.05) 23px 24px),
+        #0a1218;
+      display: grid; place-items: center;
+      overflow: hidden;
+    }
+    .craft {
+      width: 0; height: 0;
+      border-left: 18px solid transparent;
+      border-right: 18px solid transparent;
+      border-bottom: 46px solid #7ad7ff;
+      filter: drop-shadow(0 0 12px rgba(122, 215, 255, 0.35));
+      transform: translateY(6px);
+      transition: border-bottom-color 0.2s;
+    }
+    .preview .meta {
+      position: absolute; left: 12px; right: 12px; bottom: 10px;
+      font-size: 11px; color: var(--muted);
+    }
+    .preview .meta b { color: #cfe6f4; font-weight: 600; }
+
+    .tabs {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    }
+    .tab {
+      height: 30px; border-radius: 7px;
+      border: 1px solid rgba(140,200,220,0.2);
+      background: rgba(42,49,58,0.9);
+      color: #9eb0c0; font-size: 11px; cursor: pointer;
+    }
+    .tab.on {
+      background: rgba(122,215,255,0.18);
+      border-color: #7ad7ff; color: #f4fbff; font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+      gap: 8px;
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .card {
+      position: relative;
+      border-radius: 10px;
+      border: 1.5px solid rgba(140,200,220,0.22);
+      background: rgba(10, 18, 26, 0.85);
+      padding: 10px 10px 12px;
+      cursor: pointer;
+      min-height: 108px;
+      transition: border-color 0.15s, transform 0.1s;
+    }
+    .card:active { transform: scale(0.98); }
+    .card.on {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(122,215,255,0.25);
+    }
+    .card.trial {
+      border-color: rgba(255, 210, 100, 0.35);
+    }
+    .card.trial.on {
+      border-color: var(--trial);
+      box-shadow: 0 0 0 1px rgba(255,210,100,0.25);
+    }
+    .card.locked {
+      opacity: 0.55; cursor: not-allowed;
+      filter: grayscale(0.35);
+    }
+    .badge {
+      position: absolute; top: 8px; right: 8px;
+      font-size: 9px; letter-spacing: 0.04em;
+      padding: 2px 6px; border-radius: 999px;
+      border: 1px solid transparent;
+    }
+    .badge.own { color: var(--own); border-color: rgba(61,220,132,0.35); background: rgba(20,60,40,0.5); }
+    .badge.trial { color: var(--trial); border-color: rgba(255,210,100,0.4); background: rgba(50,40,10,0.55); }
+    .badge.lock { color: var(--lock); border-color: rgba(120,140,160,0.35); background: rgba(20,24,30,0.6); }
+    .card h3 {
+      margin: 0 0 4px; font-size: 13px; padding-right: 48px;
+    }
+    .card p {
+      margin: 0; font-size: 11px; color: var(--muted); min-height: 2.6em;
+    }
+    .card .swatch {
+      width: 28px; height: 28px; border-radius: 8px; margin-bottom: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    footer {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 10px;
+    }
+    @media (max-width: 720px) {
+      footer { grid-template-columns: 1fr; }
+    }
+    .legend, .log {
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: rgba(6, 12, 18, 0.75);
+      padding: 10px 12px;
+      font-size: 11px; color: var(--muted);
+    }
+    .legend h4, .log h4 {
+      margin: 0 0 6px; font-size: 11px; color: #cfe6f4; font-weight: 600;
+    }
+    .legend ul { margin: 0; padding-left: 16px; }
+    .legend li { margin: 2px 0; }
+    .log pre {
+      margin: 0; white-space: pre-wrap; word-break: break-word;
+      color: #9eb8c8; font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+      max-height: 72px; overflow: auto;
+    }
+
+    .toast {
+      position: fixed; left: 50%; bottom: calc(24px + var(--safe-b));
+      transform: translateX(-50%);
+      padding: 8px 14px; border-radius: 999px;
+      background: rgba(0,0,0,0.72); color: #d8e8f2;
+      font-size: 12px; opacity: 0; pointer-events: none;
+      transition: opacity 0.2s; z-index: 20;
+    }
+    .toast.show { opacity: 1; }
+
+    .modal {
+      position: fixed; inset: 0; z-index: 30;
+      display: none; place-items: center;
+      background: rgba(4, 10, 16, 0.72);
+      backdrop-filter: blur(3px);
+    }
+    .modal.show { display: grid; }
+    .modal .box {
+      width: min(360px, calc(100% - 32px));
+      padding: 18px 16px 14px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      text-align: center;
+    }
+    .modal h3 { margin: 0 0 8px; color: var(--trial); font-size: 16px; }
+    .modal p { margin: 0 0 14px; color: var(--muted); font-size: 12.5px; }
+    .modal .row { display: flex; justify-content: center; gap: 10px; }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <header>
+      <h1>机库改装<em>试飞权限 Demo</em></h1>
+      <div class="spacer"></div>
+      <button class="btn ghost" id="btnReset" type="button">重置权限样例</button>
+      <button class="btn" id="btnSave" type="button">保存</button>
+      <button class="btn primary" id="btnFly" type="button">试飞 ▶</button>
+    </header>
+
+    <div class="banner" id="banner">
+      <strong>试飞方案</strong>
+      <span id="bannerText">当前含未拥有装备：可试飞，但不能写入存档。</span>
+    </div>
+
+    <div class="main">
+      <section class="panel">
+        <div class="preview">
+          <div class="craft" id="craftShape"></div>
+          <div class="meta">
+            当前方案 · <b id="loadoutLabel">—</b><br />
+            已保存 · <b id="savedLabel">—</b>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="tabs">
+          <button class="tab on" data-tab="main" type="button">主武器</button>
+          <button class="tab" data-tab="sub" type="button">副武器</button>
+          <button class="tab" data-tab="engine" type="button">引擎</button>
+        </div>
+        <div class="grid" id="grid"></div>
+      </section>
+    </div>
+
+    <footer>
+      <div class="legend">
+        <h4>规则（本 Demo 演示）</h4>
+        <ul>
+          <li><b style="color:var(--own)">已拥有</b>：可选、可保存、对局可用</li>
+          <li><b style="color:var(--trial)">可试飞</b>：可选进当前方案并试飞，<b>不可保存</b></li>
+          <li><b style="color:var(--lock)">未解锁</b>：灰态，点一下只提示如何获取</li>
+          <li>点「保存」时若含可试飞件 → 拦截，并说明原因</li>
+          <li>点「试飞」→ 带着当前方案进训练场（含试飞件）</li>
+        </ul>
+      </div>
+      <div class="log">
+        <h4>事件日志</h4>
+        <pre id="log">就绪。点选装备试试。</pre>
+      </div>
+    </footer>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <div class="modal" id="modal">
+    <div class="box">
+      <h3 id="modalTitle">提示</h3>
+      <p id="modalBody"></p>
+      <div class="row">
+        <button class="btn" id="modalCancel" type="button">取消</button>
+        <button class="btn primary" id="modalOk" type="button">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      /**
+       * 权限模型（建议落地到机库）：
+       * - owned: 永久可用
+       * - trial: 可装进「草稿方案」并试飞，不能写入 saved
+       * - locked: 不可装
+       *
+       * 两套数据：
+       * - draft：当前界面选中（可含 trial）
+       * - saved：真正存档 / 匹配生效（仅 owned）
+       */
+      const CATALOG = {
+        main: [
+          { id: "gun", name: "机关炮", desc: "均衡 · 高射速", color: "#39ff14", access: "owned" },
+          { id: "cannon", name: "加农炮", desc: "重炮 · 爆裂弹", color: "#ff9a3c", access: "owned" },
+          { id: "gatling", name: "双管加特林", desc: "越转越快 · 弹幕", color: "#ffe66b", access: "trial" },
+        ],
+        sub: [
+          { id: "missile", name: "导弹", desc: "追踪 · 范围爆炸", color: "#ffb347", access: "owned" },
+          { id: "laser", name: "激光炮", desc: "穿透切石", color: "#ff4d6d", access: "trial" },
+          { id: "emp", name: "电磁脉冲炮", desc: "瘫痪 4 秒", color: "#6ecbff", access: "locked" },
+          { id: "drone", name: "无人机", desc: "双机伴飞拦截", color: "#5dffc8", access: "trial" },
+        ],
+        engine: [
+          { id: "single", name: "单引擎", desc: "轻巧灵活", color: "#7ad7ff", access: "owned" },
+          { id: "twin", name: "双引擎", desc: "速度翻倍", color: "#ffe08a", access: "locked" },
+        ],
+      };
+
+      const DEFAULT_SAVED = { main: "gun", sub: "missile", engine: "single" };
+      let accessMap = snapshotAccess();
+      let saved = { ...DEFAULT_SAVED };
+      let draft = { ...saved };
+      let tab = "main";
+
+      const grid = document.getElementById("grid");
+      const banner = document.getElementById("banner");
+      const bannerText = document.getElementById("bannerText");
+      const loadoutLabel = document.getElementById("loadoutLabel");
+      const savedLabel = document.getElementById("savedLabel");
+      const craftShape = document.getElementById("craftShape");
+      const btnSave = document.getElementById("btnSave");
+      const btnFly = document.getElementById("btnFly");
+      const logEl = document.getElementById("log");
+      const toast = document.getElementById("toast");
+      const modal = document.getElementById("modal");
+      const modalTitle = document.getElementById("modalTitle");
+      const modalBody = document.getElementById("modalBody");
+
+      function snapshotAccess() {
+        const m = {};
+        for (const slot of Object.keys(CATALOG)) {
+          for (const item of CATALOG[slot]) m[`${slot}:${item.id}`] = item.access;
+        }
+        return m;
+      }
+
+      function accessOf(slot, id) {
+        return accessMap[`${slot}:${itemKey(slot, id)}`] || "locked";
+      }
+      function itemKey(slot, id) { return id; }
+
+      function findItem(slot, id) {
+        return CATALOG[slot].find((x) => x.id === id);
+      }
+
+      function trialParts(lo) {
+        const parts = [];
+        for (const slot of ["main", "sub", "engine"]) {
+          const id = lo[slot];
+          if (accessOf(slot, id) === "trial") {
+            parts.push(findItem(slot, id).name);
+          }
+        }
+        return parts;
+      }
+
+      function hasTrial(lo) { return trialParts(lo).length > 0; }
+
+      function labelOf(lo) {
+        return [
+          findItem("main", lo.main).name,
+          findItem("sub", lo.sub).name,
+          findItem("engine", lo.engine).name,
+        ].join(" · ");
+      }
+
+      function log(msg) {
+        const t = new Date().toLocaleTimeString();
+        logEl.textContent = `[${t}] ${msg}\n` + logEl.textContent.split("\n").slice(0, 8).join("\n");
+      }
+
+      function showToast(msg) {
+        toast.textContent = msg;
+        toast.classList.add("show");
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => toast.classList.remove("show"), 1600);
+      }
+
+      function openModal(title, body, { okText = "知道了", cancel = false, onOk } = {}) {
+        modalTitle.textContent = title;
+        modalBody.textContent = body;
+        document.getElementById("modalOk").textContent = okText;
+        document.getElementById("modalCancel").style.display = cancel ? "" : "none";
+        modal.classList.add("show");
+        modal._onOk = onOk || null;
+      }
+
+      function closeModal() {
+        modal.classList.remove("show");
+        modal._onOk = null;
+      }
+
+      function refresh() {
+        const trial = hasTrial(draft);
+        banner.classList.toggle("show", trial);
+        if (trial) {
+          bannerText.textContent = `含 ${trialParts(draft).join("、")}：可点试飞，保存会被拦截。`;
+        }
+        btnSave.disabled = false;
+        btnSave.classList.toggle("warn", trial);
+        btnSave.textContent = trial ? "保存（不可用）" : "保存";
+        loadoutLabel.textContent = labelOf(draft);
+        savedLabel.textContent = labelOf(saved);
+        const main = findItem("main", draft.main);
+        craftShape.style.borderBottomColor = main.color;
+
+        grid.innerHTML = "";
+        for (const item of CATALOG[tab]) {
+          const access = accessOf(tab, item.id);
+          const on = draft[tab] === item.id;
+          const card = document.createElement("button");
+          card.type = "button";
+          card.className = "card"
+            + (on ? " on" : "")
+            + (access === "trial" ? " trial" : "")
+            + (access === "locked" ? " locked" : "");
+          const badge =
+            access === "owned" ? '<span class="badge own">已拥有</span>'
+            : access === "trial" ? '<span class="badge trial">可试飞</span>'
+            : '<span class="badge lock">未解锁</span>';
+          card.innerHTML = `
+            <div class="swatch" style="background:${item.color}"></div>
+            ${badge}
+            <h3>${item.name}</h3>
+            <p>${item.desc}</p>
+          `;
+          card.addEventListener("click", () => selectItem(tab, item, access));
+          grid.appendChild(card);
+        }
+      }
+
+      function selectItem(slot, item, access) {
+        if (access === "locked") {
+          openModal(
+            "尚未解锁",
+            `「${item.name}」还未拥有。可先去活动/关卡获取；当前不能装备，也不能试飞。`
+          );
+          log(`点选未解锁：${item.name}`);
+          return;
+        }
+        draft[slot] = item.id;
+        if (access === "trial") {
+          showToast(`已装入试飞件「${item.name}」· 不可保存`);
+          log(`装入试飞件：${item.name}（draft 更新，saved 不变）`);
+        } else {
+          showToast(`已装备「${item.name}」`);
+          log(`装备已拥有：${item.name}`);
+        }
+        refresh();
+      }
+
+      function trySave() {
+        if (hasTrial(draft)) {
+          openModal(
+            "无法保存",
+            `当前方案含试飞装备（${trialParts(draft).join("、")}）。\n可以继续试飞，但存档仍保持：${labelOf(saved)}`,
+            {
+              okText: "继续改装",
+              cancel: true,
+            }
+          );
+          log("保存被拦截：draft 含 trial 件");
+          return;
+        }
+        saved = { ...draft };
+        showToast("方案已保存");
+        log(`已保存：${labelOf(saved)}`);
+        refresh();
+      }
+
+      function tryFly() {
+        const trial = trialParts(draft);
+        const note = trial.length
+          ? `试飞生效（含体验：${trial.join("、")}）。对局匹配仍用已保存方案。`
+          : "试飞生效（当前方案均可永久使用）。";
+        openModal("进入试飞", note + `\n\n本次携带：${labelOf(draft)}`, {
+          okText: "模拟进入训练场",
+          onOk: () => {
+            showToast("已进入训练场（Demo）");
+            log(`试飞出发：${labelOf(draft)}`);
+          },
+        });
+      }
+
+      document.querySelectorAll(".tab").forEach((el) => {
+        el.addEventListener("click", () => {
+          document.querySelectorAll(".tab").forEach((t) => t.classList.remove("on"));
+          el.classList.add("on");
+          tab = el.dataset.tab;
+          refresh();
+        });
+      });
+
+      btnSave.addEventListener("click", trySave);
+      btnFly.addEventListener("click", tryFly);
+      document.getElementById("btnReset").addEventListener("click", () => {
+        accessMap = snapshotAccess();
+        saved = { ...DEFAULT_SAVED };
+        draft = { ...saved };
+        showToast("已重置为样例权限");
+        log("重置权限样例 + 存档");
+        refresh();
+      });
+      document.getElementById("modalOk").addEventListener("click", () => {
+        const fn = modal._onOk;
+        closeModal();
+        if (fn) fn();
+      });
+      document.getElementById("modalCancel").addEventListener("click", closeModal);
+      modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); });
+
+      refresh();
+    })();
+  </script>
+</body>
+</html>

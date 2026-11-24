@@ -1,0 +1,24 @@
+{
+  "deviceOrientation": "landscape",
+  "showStatusBar": false,
+  "networkTimeout": {
+    "request": 10000,
+    "connectSocket": 10000,
+    "uploadFile": 10000,
+    "downloadFile": 10000
+  },
+  "subpackages": [
+    {
+      "name": "feature",
+      "root": "pkg/feature/"
+    },
+    {
+      "name": "levels",
+      "root": "pkg/levels/"
+    },
+    {
+      "name": "craft",
+      "root": "res/"
+    }
+  ]
+}

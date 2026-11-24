@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>F-22 · 对照参考图</title>
+  <style>
+    :root { --ink:#e8eef4; --muted:#8fa0ad; --line:#26323d; --panel:#10161de8; --accent:#5ec8ff; }
+    *{box-sizing:border-box} html,body{height:100%;margin:0}
+    body{overflow:hidden;background:#080c11;color:var(--ink);font:14px system-ui,sans-serif}
+    .app{height:100%;display:grid;grid-template-columns:320px 1fr}
+    .panel{z-index:2;padding:20px;background:var(--panel);border-right:1px solid var(--line);overflow:auto}
+    h1{margin:0 0 4px;font-size:22px} h1 b{color:var(--accent)}
+    .tag{margin:0 0 12px;color:var(--muted);line-height:1.45;font-size:13px}
+    .ref{width:100%;border:1px solid var(--line);background:#000;margin:0 0 12px;display:block}
+    .stat{margin:0 0 14px;padding:9px 11px;border:1px solid var(--line);background:#080c1188;font:12px ui-monospace,monospace;color:#b9dff2}
+    .field{margin:0 0 12px}
+    .head{display:flex;justify-content:space-between;margin-bottom:6px}
+    .head label{color:var(--muted);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+    .val{color:var(--accent);font:12px ui-monospace,monospace}
+    input[type=range]{appearance:none;width:100%;height:6px;border:0;border-radius:10px;background:#26323d}
+    input[type=range]::-webkit-slider-thumb{appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #071018;cursor:pointer}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    button{padding:8px 11px;border:1px solid var(--line);background:#151e27;color:var(--ink);font-weight:700;cursor:pointer}
+    button.primary{background:var(--accent);color:#061018;border-color:var(--accent)}
+    .note{color:var(--muted);font-size:12px;line-height:1.45;margin-top:14px}
+    #view{position:relative;min-width:0}
+    canvas{display:block;width:100%!important;height:100%!important}
+    .hud{position:absolute;left:12px;bottom:12px;padding:7px 10px;border:1px solid var(--line);background:#080c11bb;color:#a8bbc8;font:12px ui-monospace,monospace;pointer-events:none}
+    @media(max-width:780px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr}.panel{max-height:48vh;border-right:0;border-bottom:1px solid var(--line)}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <h1>F-22 <b>对照</b></h1>
+    <p class="tag">按参考俯视图 alpha 栅格重建网格，与叠层同像素对齐。扁平机身 + 外倾垂尾 + 矩形喷口。</p>
+    <img class="ref" src="../res/craft-f22.png" alt="reference" />
+    <div class="stat" id="stat">构建中…</div>
+    <div class="field"><div class="head"><label>参考图叠层</label><span class="val" id="ghostV">40%</span></div><input id="ghost" type="range" min="0" max="100" value="40"></div>
+    <div class="field"><div class="head"><label>机身透明度</label><span class="val" id="bodyOpV">90%</span></div><input id="bodyOp" type="range" min="10" max="100" value="90"></div>
+    <div class="field"><div class="head"><label>Roll 压坡</label><span class="val" id="rollV">0°</span></div><input id="roll" type="range" min="-65" max="65" value="0"></div>
+    <div class="field"><div class="head"><label>Yaw</label><span class="val" id="yawV">0°</span></div><input id="yaw" type="range" min="-180" max="180" value="0"></div>
+    <div class="field"><div class="head"><label>俯视角</label><span class="val" id="elevV">89°</span></div><input id="elev" type="range" min="40" max="89" value="89"></div>
+    <div class="field"><div class="head"><label>距离</label><span class="val" id="distV">10.5</span></div><input id="dist" type="range" min="6" max="16" value="10.5" step=".1"></div>
+    <div class="field"><div class="head"><label>线框</label><span class="val" id="wireV">关</span></div><input id="wire" type="range" min="0" max="1" value="0"></div>
+    <div class="actions">
+      <button class="primary" id="reset">复位对照</button>
+      <button id="left">左压坡</button>
+      <button id="right">右压坡</button>
+    </div>
+    <p class="note">自检方式：叠层拉高、机身半透明——外轮廓应与硬边参考图重合。网格来自 craft-f22.png 的 alpha 栅格。</p>
+  </aside>
+  <main id="view"><div class="hud" id="hud">loading…</div></main>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<script type="module">
+import * as THREE from "three";
+
+const el = (id) => document.getElementById(id);
+const view = el("view");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x080c11);
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+camera.up.set(0, 0, 1);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  alpha: true,
+  preserveDrawingBuffer: true,
+});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+view.prepend(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xc0d8ff, 0x151b22, 1.15));
+const sun = new THREE.DirectionalLight(0xffffff, 2.0);
+sun.position.set(-4, 10, 5);
+scene.add(sun);
+scene.add(new THREE.DirectionalLight(0x6ec8ff, 0.65).translateX(5).translateY(2).translateZ(-3));
+const grid = new THREE.GridHelper(24, 24, 0x263845, 0x121c24);
+grid.position.y = -0.4;
+scene.add(grid);
+
+const root = new THREE.Group();
+scene.add(root);
+
+const mats = [];
+function makeMat(color, metal = 0.4, rough = 0.55, extra = {}) {
+  const m = new THREE.MeshStandardMaterial({
+    color, metalness: metal, roughness: rough, side: THREE.DoubleSide, ...extra,
+  });
+  mats.push(m);
+  return m;
+}
+const bodyMat = makeMat(0xffffff, 0.15, 0.72, { transparent: true, opacity: 0.85 });
+const darkMat = makeMat(0x12171d, 0.55, 0.4);
+const glassMat = makeMat(0x0a1822, 0.12, 0.2, { transparent: true, opacity: 0.88 });
+const finMat = makeMat(0x5a6570, 0.38, 0.55);
+const hotMat = makeMat(0x6a2a12, 0.2, 0.45, { emissive: 0x3a1206, emissiveIntensity: 1.4 });
+
+function surface(us, vs, fn, wrapV = false) {
+  const pos = [];
+  const idx = [];
+  const vc = wrapV ? vs : vs + 1;
+  for (let i = 0; i <= us; i++) {
+    for (let j = 0; j < vc; j++) {
+      const p = fn(i / us, j / vs);
+      pos.push(p.x, p.y, p.z);
+    }
+  }
+  const at = (i, j) => i * vc + (wrapV ? ((j % vs) + vs) % vs : j);
+  for (let i = 0; i < us; i++) {
+    for (let j = 0; j < vs; j++) {
+      const a = at(i, j), b = at(i + 1, j), c = at(i + 1, j + 1), d = at(i, j + 1);
+      idx.push(a, b, c, a, c, d);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+/** 从 alpha 高度图生成与贴图像素格完全对齐的棱柱网格 */
+function buildFromHeightmap(hmap, n, scale, thick) {
+  const solid = new Uint8Array(n * n);
+  for (let i = 0; i < hmap.length; i++) solid[i] = hmap[i] > 0 ? 1 : 0;
+
+  const pos = [];
+  const uvs = [];
+  const idx = [];
+  // 不合并顶点：每像素独立四边形，UV 与参考图一一对应
+  const pushV = (x, y, z, u, v) => {
+    pos.push(x, y, z);
+    uvs.push(u, v);
+    return pos.length / 3 - 1;
+  };
+
+  // 像素 (i,j) ↔ 贴图 UV [i/n,(i+1)/n]×[1-(j+1)/n, 1-j/n]（图顶 v=1）
+  const corner = (i, j) => {
+    const x = ((i / n) * 2 - 1) * scale;
+    const z = (1 - (j / n) * 2) * scale;
+    return [x, z];
+  };
+  const at = (i, j) => i >= 0 && j >= 0 && i < n && j < n && solid[j * n + i];
+
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      if (!at(i, j)) continue;
+      const [x0, z0] = corner(i, j);
+      const [x1, z1] = corner(i + 1, j);
+      const [x2, z2] = corner(i + 1, j + 1);
+      const [x3, z3] = corner(i, j + 1);
+      const u0 = i / n, u1 = (i + 1) / n;
+      const v0 = 1 - j / n, v1 = 1 - (j + 1) / n;
+
+      const t0 = pushV(x0, thick, z0, u0, v0);
+      const t1 = pushV(x1, thick, z1, u1, v0);
+      const t2 = pushV(x2, thick, z2, u1, v1);
+      const t3 = pushV(x3, thick, z3, u0, v1);
+      idx.push(t0, t1, t2, t0, t2, t3);
+
+      const b0 = pushV(x0, 0, z0, u0, v0);
+      const b1 = pushV(x1, 0, z1, u1, v0);
+      const b2 = pushV(x2, 0, z2, u1, v1);
+      const b3 = pushV(x3, 0, z3, u0, v1);
+      idx.push(b0, b2, b1, b0, b3, b2);
+
+      const wall = (need, a, b, c, d) => {
+        if (!need) return;
+        idx.push(a, d, c, a, c, b);
+      };
+      wall(!at(i, j - 1), t0, t1, b1, b0);
+      wall(!at(i, j + 1), t3, t2, b2, b3);
+      wall(!at(i - 1, j), t0, t3, b3, b0);
+      wall(!at(i + 1, j), t1, t2, b2, b1);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const ghostMat = new THREE.MeshBasicMaterial({
+  transparent: true,
+  opacity: 0.65,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
+
+let tris = 0;
+
+async function boot() {
+  const meta = await fetch("./craft-f22-hmap.json").then((r) => r.json());
+  const buf = await fetch("./craft-f22-hmap.bin").then((r) => r.arrayBuffer());
+  const hmap = new Float32Array(buf);
+  const { n, scale, thick } = meta;
+
+  const bodyGeo = buildFromHeightmap(hmap, n, scale, thick);
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  root.add(body);
+
+  new THREE.TextureLoader().load("../res/craft-f22.png", (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    bodyMat.map = tex;
+    bodyMat.needsUpdate = true;
+  });
+
+  // 座舱 / 垂尾 / 喷口
+  root.add(new THREE.Mesh(surface(36, 18, (u, v) => {
+    const zz = THREE.MathUtils.lerp(2.35, 0.75, u);
+    const a = v * Math.PI * 2;
+    const profile = Math.pow(Math.sin(Math.PI * u), 0.85);
+    return new THREE.Vector3(
+      Math.cos(a) * 0.24 * profile,
+      thick + 0.04 + Math.max(0, Math.sin(a)) * 0.13 * profile,
+      zz
+    );
+  }, true), glassMat));
+
+  for (const side of [-1, 1]) {
+    root.add(new THREE.Mesh(surface(20, 14, (u, v) => {
+      const y = thick + 0.02 + u * 0.95;
+      const x = side * (0.52 + u * 0.45);
+      const z = THREE.MathUtils.lerp(-1.85, -2.75, v) - u * 0.08;
+      return new THREE.Vector3(x, y, z);
+    }), finMat));
+  }
+  for (const side of [-1, 1]) {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.14, 0.4), darkMat);
+    box.position.set(side * 0.42, thick * 0.45, -3.0);
+    root.add(box);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.26, 0.07), hotMat);
+    glow.position.set(side * 0.42, thick * 0.45, -3.21);
+    glow.rotation.y = Math.PI;
+    root.add(glow);
+  }
+
+  // 硬边参考叠层（与高度图同阈值）
+  const ghostMesh = new THREE.Mesh(new THREE.PlaneGeometry(scale * 2, scale * 2), ghostMat);
+  ghostMesh.rotation.x = Math.PI / 2;
+  ghostMesh.position.y = thick + 0.05;
+  root.add(ghostMesh);
+
+  new THREE.TextureLoader().load("../res/craft-f22.png", (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    ghostMat.map = tex;
+    ghostMat.needsUpdate = true;
+  });
+
+  tris = 0;
+  root.traverse((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    const g = o.geometry;
+    tris += g.index ? g.index.count / 3 : g.attributes.position.count / 3;
+  });
+  el("stat").textContent = `${Math.round(tris).toLocaleString()} 三角面 · ${n}×${n} alpha 栅格`;
+  apply();
+
+  // 供批量导出压坡帧使用：透明背景、固定正俯视、1024×1024。
+  window.captureBankFrame = (angle) => {
+    const oldBackground = scene.background;
+    const oldGridVisible = grid.visible;
+    const oldGhostOpacity = ghostMat.opacity;
+    const oldBodyOpacity = bodyMat.opacity;
+    const oldBodyTransparent = bodyMat.transparent;
+    const oldSize = new THREE.Vector2();
+    renderer.getSize(oldSize);
+    const oldPixelRatio = renderer.getPixelRatio();
+
+    scene.background = null;
+    grid.visible = false;
+    ghostMat.opacity = 0;
+    bodyMat.opacity = 1;
+    bodyMat.transparent = false;
+    root.rotation.set(0, 0, THREE.MathUtils.degToRad(angle));
+    camera.aspect = 1;
+    camera.position.set(0, 12.5, 0);
+    camera.lookAt(0, 0.12, 0);
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(1);
+    renderer.setSize(1024, 1024, false);
+    renderer.render(scene, camera);
+    const dataUrl = renderer.domElement.toDataURL("image/png");
+
+    scene.background = oldBackground;
+    grid.visible = oldGridVisible;
+    ghostMat.opacity = oldGhostOpacity;
+    bodyMat.opacity = oldBodyOpacity;
+    bodyMat.transparent = oldBodyTransparent;
+    renderer.setPixelRatio(oldPixelRatio);
+    renderer.setSize(oldSize.x, oldSize.y, false);
+    apply();
+    return dataUrl;
+  };
+}
+
+const deg = (n) => `${Math.round(n)}°`;
+
+function apply() {
+  const r = +el("roll").value;
+  const y = +el("yaw").value;
+  const e = +el("elev").value;
+  const di = +el("dist").value;
+  const w = +el("wire").value === 1;
+  const gop = +el("ghost").value / 100;
+  const bop = +el("bodyOp").value / 100;
+
+  root.rotation.order = "YXZ";
+  root.rotation.y = THREE.MathUtils.degToRad(y);
+  root.rotation.z = THREE.MathUtils.degToRad(r);
+  root.rotation.x = 0;
+
+  const er = THREE.MathUtils.degToRad(e);
+  camera.position.set(0, Math.sin(er) * di, -Math.cos(er) * di);
+  camera.lookAt(0, 0.12, 0);
+
+  ghostMat.opacity = gop;
+  bodyMat.opacity = bop;
+  bodyMat.transparent = bop < 0.99;
+  mats.forEach((m) => { m.wireframe = w; });
+
+  el("ghostV").textContent = `${Math.round(gop * 100)}%`;
+  el("bodyOpV").textContent = `${Math.round(bop * 100)}%`;
+  el("rollV").textContent = deg(r);
+  el("yawV").textContent = deg(y);
+  el("elevV").textContent = deg(e);
+  el("distV").textContent = di.toFixed(1);
+  el("wireV").textContent = w ? "开" : "关";
+  el("hud").textContent =
+    `对照 · ghost ${Math.round(gop * 100)}% · body ${Math.round(bop * 100)}% · ${Math.round(tris).toLocaleString()} tris`;
+}
+
+["ghost", "bodyOp", "roll", "yaw", "elev", "dist", "wire"].forEach((id) => {
+  el(id).addEventListener("input", apply);
+});
+el("reset").onclick = () => {
+  el("ghost").value = 40;
+  el("bodyOp").value = 90;
+  el("roll").value = 0;
+  el("yaw").value = 0;
+  el("elev").value = 89;
+  el("dist").value = 10.5;
+  el("wire").value = 0;
+  apply();
+};
+el("left").onclick = () => { el("roll").value = -40; apply(); };
+el("right").onclick = () => { el("roll").value = 40; apply(); };
+
+function resize() {
+  const w = view.clientWidth || 1;
+  const h = view.clientHeight || 1;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h, false);
+}
+addEventListener("resize", resize);
+resize();
+
+boot().catch((err) => {
+  el("stat").textContent = "构建失败：" + err.message;
+  console.error(err);
+});
+
+(function tick() {
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

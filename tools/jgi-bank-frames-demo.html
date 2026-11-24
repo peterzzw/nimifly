@@ -1,0 +1,921 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>JGI · 左右压坡出帧 Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --cyan: #57d8ff;
+      --panel: rgba(7, 15, 23, .9);
+      --line: rgba(89, 185, 224, .28);
+      --muted: #7f97a7;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; }
+    body {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      color: #e8f6ff;
+      background: #04080e;
+      font: 13px system-ui, "Microsoft YaHei", sans-serif;
+      overflow: hidden;
+    }
+    #stage {
+      position: relative;
+      min-height: 0;
+      background:
+        linear-gradient(45deg, #0a1218 25%, transparent 25%) 0 0 / 24px 24px,
+        linear-gradient(-45deg, #0a1218 25%, transparent 25%) 0 0 / 24px 24px,
+        linear-gradient(45deg, transparent 75%, #0a1218 75%) 0 0 / 24px 24px,
+        linear-gradient(-45deg, transparent 75%, #0a1218 75%) 0 0 / 24px 24px,
+        #061018;
+      background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+    }
+    #view, #preview {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #preview { display: none; object-fit: contain; image-rendering: auto; }
+    #preview.on { display: block; }
+    #view.hide { visibility: hidden; pointer-events: none; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .hud {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      right: 14px;
+      z-index: 3;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      pointer-events: none;
+    }
+    .box {
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 36px rgba(0,0,0,.35);
+    }
+    h1 { margin: 0; font-size: 16px; letter-spacing: .06em; }
+    h1 b { color: var(--cyan); }
+    .sub { margin-top: 4px; color: var(--muted); font: 11px/1.45 ui-monospace, Consolas, monospace; }
+    .readout {
+      min-width: 168px;
+      text-align: right;
+      color: #86a5b5;
+      font: 11px/1.7 ui-monospace, Consolas, monospace;
+    }
+    .readout b { color: #e8fbff; }
+    .dock {
+      z-index: 4;
+      padding: 12px 14px 14px;
+      border-top: 1px solid var(--line);
+      background: rgba(5, 11, 17, .96);
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .toolbar .grow { flex: 1; min-width: 120px; color: var(--muted); font: 11px ui-monospace, Consolas, monospace; }
+    button, select {
+      height: 34px;
+      padding: 0 12px;
+      border: 1px solid #355f74;
+      border-radius: 7px;
+      color: #d7eef7;
+      background: #122533;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.primary { color: #04131a; border-color: var(--cyan); background: var(--cyan); }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    select { min-width: 96px; }
+    .strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .thumb {
+      flex: 0 0 auto;
+      width: 72px;
+      cursor: pointer;
+      border: 1px solid #2a4656;
+      border-radius: 8px;
+      background:
+        linear-gradient(45deg, #101820 25%, transparent 25%) 0 0 / 10px 10px,
+        linear-gradient(-45deg, #101820 25%, transparent 25%) 0 0 / 10px 10px,
+        #071018;
+      overflow: hidden;
+    }
+    .thumb.on { border-color: var(--cyan); box-shadow: 0 0 0 1px var(--cyan); }
+    .thumb img { display: block; width: 72px; height: 72px; object-fit: contain; }
+    .thumb span {
+      display: block;
+      padding: 3px 4px 5px;
+      color: #8fb0c0;
+      font: 10px ui-monospace, Consolas, monospace;
+      text-align: center;
+      background: rgba(0,0,0,.35);
+    }
+    .loading {
+      position: fixed;
+      inset: 0;
+      z-index: 9;
+      display: grid;
+      place-items: center;
+      background: #04080e;
+      color: #9ec9da;
+      font: 12px ui-monospace, Consolas, monospace;
+      transition: opacity .28s;
+    }
+    .loading.done { opacity: 0; pointer-events: none; }
+    .progress {
+      width: min(280px, 70vw);
+      height: 4px;
+      margin-top: 12px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: #1a2d39;
+    }
+    .progress i {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="view"></div>
+    <canvas id="preview"></canvas>
+    <div class="hud">
+      <div class="box">
+        <h1>JGI <b>FRAMES</b></h1>
+        <div class="sub">3d66.com_JGI54550819259.fbx<br />正俯视透明 PNG · ±60°</div>
+      </div>
+      <div class="box readout">
+        ROLL&nbsp; <b id="rollText">—</b><br />
+        FRAME <b id="frameText">—</b><br />
+        SIZE&nbsp; <b id="sizeText">1024²</b>
+      </div>
+    </div>
+  </div>
+
+  <div class="dock">
+    <div class="toolbar">
+      <select id="count" title="帧数">
+        <option value="10" selected>10 帧</option>
+        <option value="12">12 帧</option>
+        <option value="20">20 帧</option>
+        <option value="24">24 帧</option>
+      </select>
+      <select id="size" title="分辨率">
+        <option value="512">512²</option>
+        <option value="1024" selected>1024²</option>
+        <option value="1536">1536²</option>
+      </select>
+      <select id="range" title="压坡范围">
+        <option value="40">±40°</option>
+        <option value="60" selected>±60°</option>
+        <option value="75">±75°</option>
+      </select>
+      <button id="modeMove" type="button" class="primary" title="拖红绿蓝轴平移模型">移动</button>
+      <button id="modeRot" type="button" title="拖轴旋转模型">旋转</button>
+      <button id="axisReset" type="button" title="复位到包围盒中心">复位</button>
+      <span id="axisReadout" style="color:#9bb8c8;font-size:11px;font-variant-numeric:tabular-nums;min-width:160px">X0 Y0 Z0</span>
+      <button id="sideView" type="button" title="侧视">侧视</button>
+      <button id="rearView" type="button" title="尾视">尾视</button>
+      <button id="topView" type="button" title="俯视">俯视</button>
+      <button id="hold" type="button" title="停在 0°，不左右摆">原地</button>
+      <button id="bake" class="primary" disabled>出帧</button>
+      <button id="play" disabled>预览播放</button>
+      <button id="zip" disabled>下载 ZIP</button>
+      <button id="saveLocal" disabled>保存到 jgi-frames</button>
+      <div class="grow" id="status">载入模型中…</div>
+    </div>
+    <div class="strip" id="strip"></div>
+  </div>
+
+  <div class="loading" id="loading">
+    <div>
+      <div id="loadText">正在载入 FBX…</div>
+      <div class="progress"><i id="progress"></i></div>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+        "jszip": "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { TransformControls } from "three/addons/controls/TransformControls.js";
+    import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+    import JSZip from "jszip";
+
+    const el = (id) => document.getElementById(id);
+    const view = el("view");
+    const preview = el("preview");
+    const previewCtx = preview.getContext("2d");
+    const strip = el("strip");
+    const status = el("status");
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x04080e);
+
+    // 预览可透视；出帧必须正交，否则压坡时透视把喷口「挤」歪，看起来像模型轴歪了。
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 2000);
+    camera.position.set(0, 10, 0.001);
+    camera.up.set(0, 0, -1);
+    const bakeCamera = new THREE.OrthographicCamera(-5, 5, 5, -5, 0.01, 2000);
+    bakeCamera.position.set(0, 10, 0);
+    bakeCamera.up.set(0, 0, -1);
+    bakeCamera.lookAt(0, 0, 0);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true,
+    });
+    renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
+    renderer.setClearColor(0x000000, 0);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.12;
+    view.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 0, 0);
+
+    // 三轴手柄：拖模型去对齐固定滚转轴（红点/青线）
+    const transformControls = new TransformControls(camera, renderer.domElement);
+    transformControls.setMode("translate");
+    transformControls.setSpace("world");
+    transformControls.setSize(1.15);
+    transformControls.enabled = false;
+    scene.add(transformControls);
+    transformControls.addEventListener("dragging-changed", (ev) => {
+      controls.enabled = !ev.value;
+      if (ev.value) pinView = null;
+    });
+    transformControls.addEventListener("objectChange", () => {
+      syncReadoutFromModel();
+      status.textContent = "拖轴对齐中 · 红点=滚转轴，把尾喷口拖到红点上";
+    });
+
+    scene.add(new THREE.HemisphereLight(0xb7dcf0, 0x12181e, 1.35));
+    const key = new THREE.DirectionalLight(0xffffff, 2.8);
+    key.position.set(-5, 9, 7);
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x55bbff, 2.0);
+    rim.position.set(7, 3.5, -5);
+    scene.add(rim);
+
+    // modelRoot 只负责绕机身滚转；alignRoot 里放「轴校正后」的模型。
+    const modelRoot = new THREE.Group();
+    const alignRoot = new THREE.Group();
+    modelRoot.add(alignRoot);
+    scene.add(modelRoot);
+    // 滚转轴参考（出帧时整体隐藏，避免烤进 PNG）
+    const axisHelpers = new THREE.Group();
+    scene.add(axisHelpers);
+    {
+      const mat = new THREE.LineBasicMaterial({ color: 0x57d8ff, transparent: true, opacity: 0.55 });
+      axisHelpers.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, -4.5),
+          new THREE.Vector3(0, 0, 4.5),
+        ]),
+        mat
+      ));
+      axisHelpers.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(-1.2, 0, 0),
+          new THREE.Vector3(1.2, 0, 0),
+        ]),
+        mat
+      ));
+      axisHelpers.add(new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, -1.2, 0),
+          new THREE.Vector3(0, 1.2, 0),
+        ]),
+        mat
+      ));
+      const pivotDot = new THREE.Mesh(
+        new THREE.SphereGeometry(0.12, 14, 14),
+        new THREE.MeshBasicMaterial({ color: 0xff3355, depthTest: false, transparent: true, opacity: 0.95 })
+      );
+      pivotDot.position.set(0, 0, 0);
+      pivotDot.renderOrder = 10;
+      axisHelpers.add(pivotDot);
+      const axisArrow = new THREE.ArrowHelper(
+        new THREE.Vector3(0, 0, 1),
+        new THREE.Vector3(0, 0, -2.8),
+        5.5,
+        0xff3355,
+        0.35,
+        0.2
+      );
+      axisArrow.line.material.depthTest = false;
+      axisArrow.cone.material.depthTest = false;
+      axisArrow.renderOrder = 10;
+      axisHelpers.add(axisArrow);
+      window.__pivotDot = pivotDot;
+      window.__axisArrow = axisArrow;
+    }
+    let fittedBasePos = new THREE.Vector3();
+    let fittedBaseRotY = 0;
+
+    let model = null;
+    let frames = [];
+    let selected = 0;
+    let playing = false;
+    let playDir = 1;
+    let playAcc = 0;
+    let liveRoll = 0;
+    // 默认原地静止，便于看滚转轴；点「原地」也会回到 0°
+    let holdStill = true;
+
+    function sampleWorldPoints(root, maxSamples = 8000) {
+      const pts = [];
+      const v = new THREE.Vector3();
+      root.updateMatrixWorld(true);
+      root.traverse((node) => {
+        if (!node.isMesh || !node.geometry) return;
+        const pos = node.geometry.attributes.position;
+        if (!pos) return;
+        const step = Math.max(1, (pos.count / Math.max(1, (maxSamples / 4) | 0)) | 0);
+        for (let i = 0; i < pos.count; i += step) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(node.matrixWorld);
+          pts.push(v.x, v.y, v.z);
+        }
+      });
+      return pts;
+    }
+
+    function recenterOnOrigin(object) {
+      object.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(alignRoot);
+      const c = box.getCenter(new THREE.Vector3());
+      object.position.x -= c.x;
+      object.position.y -= c.y;
+      object.position.z -= c.z;
+      object.updateMatrixWorld(true);
+    }
+
+    function syncReadoutFromModel() {
+      if (!model) return;
+      const p = model.position;
+      const ry = THREE.MathUtils.radToDeg(alignRoot.rotation.y + model.rotation.y);
+      const out = el("axisReadout");
+      if (out) {
+        out.textContent = `X${p.x.toFixed(2)} Y${p.y.toFixed(2)} Z${p.z.toFixed(2)} · ${ry >= 0 ? "+" : ""}${ry.toFixed(1)}°`;
+      }
+      window.__alignYawDeg = ry;
+    }
+
+    function attachGizmo(object) {
+      transformControls.attach(object);
+      transformControls.enabled = true;
+      transformControls.setMode("translate");
+      setModeButtons("translate");
+      syncReadoutFromModel();
+    }
+
+    function setModeButtons(mode) {
+      const move = el("modeMove");
+      const rot = el("modeRot");
+      if (move) move.classList.toggle("primary", mode === "translate");
+      if (rot) rot.classList.toggle("primary", mode === "rotate");
+    }
+
+    function resetModelPose() {
+      if (!model) return;
+      model.position.copy(fittedBasePos);
+      model.rotation.set(0, 0, 0);
+      alignRoot.rotation.set(0, fittedBaseRotY, 0);
+      model.updateMatrixWorld(true);
+      syncReadoutFromModel();
+      status.textContent = "已复位 · 拖红绿蓝轴把尾喷口对准红点";
+    }
+
+    // OrbitControls.update() 会按内部球面坐标覆盖 position，侧视要每帧钉住，拖动后再松开。
+    let pinView = null;
+    controls.addEventListener("start", () => {
+      pinView = null;
+      controls.enabled = true;
+    });
+
+    function applyPinView() {
+      if (!pinView) return;
+      camera.up.copy(pinView.up);
+      camera.position.copy(pinView.pos);
+      controls.target.set(0, 0, 0);
+      camera.lookAt(0, 0, 0);
+      camera.updateMatrixWorld(true);
+    }
+
+    function setSideView() {
+      // 侧视：青线竖着，机头朝下；喷口/机身是否压在青线上一眼能看出来
+      pinView = {
+        pos: new THREE.Vector3(9, 0, 0),
+        up: new THREE.Vector3(0, 0, -1),
+      };
+      applyPinView();
+      window.__pinView = "side";
+      window.__cam = camera.position.toArray();
+    }
+
+    function setTopView() {
+      pinView = {
+        pos: new THREE.Vector3(0, 10, 0.001),
+        up: new THREE.Vector3(0, 0, -1),
+      };
+      applyPinView();
+      window.__pinView = "top";
+      window.__cam = camera.position.toArray();
+    }
+
+    function setRearView() {
+      // 从机尾看：红点必须落在正中喷口（箭头根部）
+      pinView = {
+        pos: new THREE.Vector3(-2.2, 1.4, -6.2),
+        up: new THREE.Vector3(0, 1, 0),
+      };
+      applyPinView();
+      window.__pinView = "rear";
+      window.__cam = camera.position.toArray();
+    }
+
+    /**
+     * JGI FBX：机头沿 Z、翼展沿 X（俯视机头朝下，generate 会 rotate 180）。
+     * 校正的是滚转轴朝向（偏航），让压坡绕机身而不是斜轴转。
+     */
+    function fitModel(object) {
+      alignRoot.rotation.set(0, 0, 0);
+      object.rotation.set(0, 0, 0);
+      object.position.set(0, 0, 0);
+      object.scale.setScalar(1);
+      object.updateMatrixWorld(true);
+      const box0 = new THREE.Box3().setFromObject(object);
+      const size0 = box0.getSize(new THREE.Vector3());
+      const center0 = box0.getCenter(new THREE.Vector3());
+      const maxSide = Math.max(size0.x, size0.y, size0.z) || 1;
+      const scale = 6 / maxSide;
+      object.scale.setScalar(scale);
+      object.position.set(-center0.x * scale, -center0.y * scale, -center0.z * scale);
+      recenterOnOrigin(object);
+      // 不再自动拧轴：交给三轴手柄手动拖
+      alignRoot.rotation.set(0, 0, 0);
+      object.rotation.set(0, 0, 0);
+      fittedBasePos.copy(object.position);
+      fittedBaseRotY = 0;
+      window.__alignYawDeg = 0;
+      attachGizmo(object);
+      holdStill = true;
+      setLiveRoll(0);
+      syncReadoutFromModel();
+      try {
+        status.textContent = "就绪 · 拖红绿蓝轴，把尾喷口对准红点后再出帧";
+      } catch (e) {}
+      const spanSize = new THREE.Box3().setFromObject(modelRoot).getSize(new THREE.Vector3());
+      const half = Math.max(spanSize.x, spanSize.z, 1) * 0.72;
+      bakeCamera.left = -half;
+      bakeCamera.right = half;
+      bakeCamera.top = half;
+      bakeCamera.bottom = -half;
+      bakeCamera.updateProjectionMatrix();
+      setRearView();
+    }
+
+    function setLiveRoll(deg) {
+      liveRoll = deg;
+      modelRoot.rotation.order = "XYZ";
+      // 绕世界 Z = 机身轴（俯视画面竖向）
+      modelRoot.rotation.set(0, 0, THREE.MathUtils.degToRad(deg));
+      el("rollText").textContent = `${deg >= 0 ? "+" : ""}${deg.toFixed(1)}°`;
+    }
+
+    function buildAngles(count, maxAbs) {
+      const n = Math.max(2, count | 0);
+      const angles = [];
+      for (let i = 0; i < n; i++) {
+        const t = n === 1 ? 0 : i / (n - 1);
+        angles.push(maxAbs - t * maxAbs * 2);
+      }
+      return angles;
+    }
+
+    function captureFrame(angle, px) {
+      const oldBackground = scene.background;
+      const oldRoot = modelRoot.rotation.clone();
+      const oldPixelRatio = renderer.getPixelRatio();
+      const oldSize = new THREE.Vector2();
+      renderer.getSize(oldSize);
+      const oldHelperVis = axisHelpers.visible;
+      const oldGizmoVis = transformControls.visible;
+
+      scene.background = null;
+      axisHelpers.visible = false;
+      transformControls.visible = false;
+      modelRoot.rotation.order = "XYZ";
+      modelRoot.rotation.set(0, 0, THREE.MathUtils.degToRad(angle));
+      bakeCamera.position.set(0, 10, 0);
+      bakeCamera.up.set(0, 0, -1);
+      bakeCamera.lookAt(0, 0, 0);
+      bakeCamera.updateProjectionMatrix();
+      renderer.setPixelRatio(1);
+      renderer.setSize(px, px, false);
+      renderer.setClearColor(0x000000, 0);
+      renderer.render(scene, bakeCamera);
+      const dataUrl = renderer.domElement.toDataURL("image/png");
+
+      scene.background = oldBackground;
+      axisHelpers.visible = oldHelperVis;
+      transformControls.visible = oldGizmoVis;
+      modelRoot.rotation.copy(oldRoot);
+      renderer.setPixelRatio(oldPixelRatio);
+      renderer.setSize(oldSize.x, oldSize.y, false);
+      camera.aspect = oldSize.x / Math.max(1, oldSize.y);
+      camera.updateProjectionMatrix();
+      controls.update();
+      return dataUrl;
+    }
+
+    function showPreviewFrame(index) {
+      if (!frames.length) return;
+      selected = Math.max(0, Math.min(frames.length - 1, index));
+      const frame = frames[selected];
+      const dpr = Math.min(devicePixelRatio || 1, 2);
+      const w = preview.clientWidth || 1;
+      const h = preview.clientHeight || 1;
+      preview.width = Math.floor(w * dpr);
+      preview.height = Math.floor(h * dpr);
+      previewCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      previewCtx.clearRect(0, 0, w, h);
+      const side = Math.min(w, h) * 0.82;
+      const x = (w - side) / 2;
+      const y = (h - side) / 2;
+      previewCtx.drawImage(frame.img, x, y, side, side);
+      el("rollText").textContent = `${frame.roll >= 0 ? "+" : ""}${frame.roll.toFixed(1)}°`;
+      el("frameText").textContent = `${String(selected).padStart(2, "0")} / ${String(frames.length - 1).padStart(2, "0")}`;
+      [...strip.children].forEach((node, i) => node.classList.toggle("on", i === selected));
+    }
+
+    function renderStrip() {
+      strip.innerHTML = "";
+      frames.forEach((frame, index) => {
+        const node = document.createElement("button");
+        node.type = "button";
+        node.className = "thumb" + (index === selected ? " on" : "");
+        node.innerHTML = `<img alt="" /><span>${String(index).padStart(2, "0")} · ${frame.roll >= 0 ? "+" : ""}${frame.roll.toFixed(0)}°</span>`;
+        node.querySelector("img").src = frame.dataUrl;
+        node.onclick = () => {
+          playing = false;
+          el("play").textContent = "预览播放";
+          showPreviewFrame(index);
+        };
+        strip.appendChild(node);
+      });
+    }
+
+    async function bakeFrames() {
+      if (!model) return;
+      const count = +el("count").value;
+      const px = +el("size").value;
+      const maxAbs = +el("range").value;
+      const angles = buildAngles(count, maxAbs);
+      el("bake").disabled = true;
+      el("play").disabled = true;
+      el("zip").disabled = true;
+      el("saveLocal").disabled = true;
+      playing = false;
+      el("play").textContent = "预览播放";
+      el("sizeText").textContent = `${px}²`;
+      frames = [];
+      strip.innerHTML = "";
+
+      for (let i = 0; i < angles.length; i++) {
+        const roll = angles[i];
+        status.textContent = `出帧中 ${i + 1}/${angles.length} · ${roll >= 0 ? "+" : ""}${roll.toFixed(1)}°`;
+        el("frameText").textContent = `${String(i).padStart(2, "0")} / ${String(angles.length - 1).padStart(2, "0")}`;
+        setLiveRoll(roll);
+        // 让 UI 有机会刷新
+        await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+        const dataUrl = captureFrame(roll, px);
+        const img = new Image();
+        img.src = dataUrl;
+        await img.decode();
+        const name = `frame-${String(i).padStart(2, "0")}.png`;
+        frames.push({ index: i, roll, name, dataUrl, img });
+      }
+
+      view.classList.add("hide");
+      preview.classList.add("on");
+      selected = 0;
+      renderStrip();
+      showPreviewFrame(0);
+      el("bake").disabled = false;
+      el("play").disabled = false;
+      el("zip").disabled = false;
+      el("saveLocal").disabled = false;
+      status.textContent = `完成 ${frames.length} 帧 · 透明 PNG ${px}×${px} · ±${maxAbs}°`;
+    }
+
+    async function downloadZip() {
+      if (!frames.length) return;
+      status.textContent = "打包 ZIP…";
+      const zip = new JSZip();
+      const folder = zip.folder("jgi-frames");
+      const meta = {
+        count: frames.length,
+        range: [frames[0].roll, frames[frames.length - 1].roll],
+        size: [+el("size").value, +el("size").value],
+        source: "jgi54550819259.fbx",
+        frames: frames.map((f) => ({ index: f.index, roll: f.roll, file: f.name })),
+      };
+      folder.file("frames.json", JSON.stringify(meta, null, 2));
+      for (const frame of frames) {
+        const base64 = frame.dataUrl.split(",", 1)[1] || frame.dataUrl.split(",")[1];
+        folder.file(frame.name, base64, { base64: true });
+      }
+      const blob = await zip.generateAsync({ type: "blob" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "jgi-bank-frames.zip";
+      a.click();
+      URL.revokeObjectURL(a.href);
+      status.textContent = `已下载 ZIP · ${frames.length} 帧`;
+    }
+
+    async function saveLocal() {
+      if (!frames.length) return false;
+      status.textContent = "写入本地 jgi-frames…";
+      let ok = 0;
+      try {
+        for (const frame of frames) {
+          const res = await fetch("http://127.0.0.1:8769/", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: frame.name, data: frame.dataUrl }),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          ok++;
+          status.textContent = `写入本地 ${ok}/${frames.length}`;
+        }
+        const meta = {
+          count: frames.length,
+          range: [frames[0].roll, frames[frames.length - 1].roll],
+          size: [+el("size").value, +el("size").value],
+          source: "jgi54550819259.fbx",
+          frames: frames.map((f) => ({ index: f.index, roll: f.roll, file: f.name })),
+        };
+        await fetch("http://127.0.0.1:8769/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "frames.json",
+            data: "data:application/json;base64," + btoa(unescape(encodeURIComponent(JSON.stringify(meta, null, 2)))),
+          }),
+        });
+        status.textContent = `已保存到 tools/jgi-frames · ${frames.length} 帧`;
+        return true;
+      } catch (err) {
+        console.error(err);
+        status.textContent = "本地保存失败：先运行 python tools/jgi-frame-save-server.py";
+        return false;
+      }
+    }
+
+    const AUTO =
+      new URLSearchParams(location.search).get("auto") === "save" ||
+      location.hash === "#autosave";
+    window.__jgiReady = false;
+    window.__jgiExportDone = false;
+    window.__jgiExportError = "";
+    window.__jgiExporting = false;
+
+    async function runAutoExport() {
+      if (window.__jgiExporting || window.__jgiExportDone) return window.__jgiExportDone;
+      window.__jgiExporting = true;
+      try {
+        el("count").value = "10";
+        el("size").value = "1024";
+        el("range").value = "60";
+        await bakeFrames();
+        const saved = await saveLocal();
+        if (!saved) throw new Error("saveLocal failed");
+        window.__jgiExportDone = true;
+        document.title = "JGI_EXPORT_DONE";
+        status.textContent = `自动出帧完成 · ${frames.length}`;
+        return true;
+      } catch (err) {
+        console.error(err);
+        window.__jgiExportError = String(err && err.message || err);
+        document.title = "JGI_EXPORT_FAIL";
+        status.textContent = "自动出帧失败";
+        return false;
+      } finally {
+        window.__jgiExporting = false;
+      }
+    }
+    window.runAutoExport = runAutoExport;
+
+    new FBXLoader().load(
+      "./models/jgi54550819259.fbx",
+      (object) => {
+        model = object;
+        let meshes = 0;
+        object.traverse((node) => {
+          if (!node.isMesh) return;
+          meshes++;
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          for (const material of materials) {
+            if (!material) continue;
+            material.side = THREE.DoubleSide;
+            material.needsUpdate = true;
+          }
+        });
+        while (alignRoot.children.length) alignRoot.remove(alignRoot.children[0]);
+        alignRoot.add(object);
+        fitModel(object);
+        el("progress").style.width = "100%";
+        el("loadText").textContent = `载入完成 · ${meshes} meshes`;
+        setTimeout(() => el("loading").classList.add("done"), 160);
+        el("bake").disabled = false;
+        status.textContent = "就绪 · 拖红绿蓝轴，把尾喷口对准红点后再出帧";
+        setLiveRoll(0);
+        el("frameText").textContent = "—";
+        window.__jgiReady = true;
+        window.__jgiDbg = () => {
+          const pts = sampleWorldPoints(alignRoot, 8000);
+          let zMin = Infinity, zMax = -Infinity;
+          for (let i = 2; i < pts.length; i += 3) {
+            if (pts[i] < zMin) zMin = pts[i];
+            if (pts[i] > zMax) zMax = pts[i];
+          }
+          const span = Math.max(1e-6, zMax - zMin);
+          const tailBand = zMin + span * 0.12;
+          let tx = 0, ty = 0, tn = 0;
+          for (let i = 0; i < pts.length; i += 3) {
+            if (pts[i + 2] > tailBand) continue;
+            tx += pts[i];
+            ty += pts[i + 1];
+            tn++;
+          }
+          if (tn) { tx /= tn; ty /= tn; }
+          const dir = new THREE.Vector3();
+          camera.getWorldDirection(dir);
+          return {
+            cam: camera.position.toArray(),
+            up: camera.up.toArray(),
+            dir: dir.toArray(),
+            pin: window.__pinView,
+            modelPos: model.position.toArray(),
+            modelRot: model.rotation.toArray(),
+            alignYaw: alignRoot.rotation.y,
+            exhaustXY: [tx, ty],
+            exhaustN: tn,
+            gizmo: transformControls.getMode(),
+          };
+        };
+        if (AUTO) setTimeout(() => runAutoExport(), 400);
+      },
+      (event) => {
+        if (!event.total) {
+          el("loadText").textContent = `载入中 · ${(event.loaded / 1024 / 1024).toFixed(1)} MB`;
+          return;
+        }
+        const percent = Math.min(100, event.loaded / event.total * 100);
+        el("progress").style.width = `${percent}%`;
+        el("loadText").textContent = `载入中 · ${percent.toFixed(0)}%`;
+      },
+      (error) => {
+        console.error(error);
+        el("loadText").textContent = "模型载入失败";
+        status.textContent = "FBX 载入失败";
+        window.__jgiExportError = String(error && error.message || error);
+        document.title = "JGI_EXPORT_FAIL";
+      }
+    );
+
+    el("bake").onclick = () => bakeFrames();
+    el("zip").onclick = () => downloadZip();
+    el("saveLocal").onclick = () => saveLocal();
+    el("hold").onclick = () => {
+      holdStill = true;
+      playing = false;
+      if (el("play")) el("play").textContent = "预览播放";
+      setLiveRoll(0);
+      status.textContent = "原地 0° · 可拖三轴对齐";
+    };
+    el("modeMove")?.addEventListener("click", () => {
+      if (!model) return;
+      transformControls.setMode("translate");
+      setModeButtons("translate");
+      status.textContent = "移动模式 · 拖红/绿/蓝轴平移";
+    });
+    el("modeRot")?.addEventListener("click", () => {
+      if (!model) return;
+      transformControls.setMode("rotate");
+      setModeButtons("rotate");
+      status.textContent = "旋转模式 · 拖轴旋转（偏航用绿环）";
+    });
+    el("axisReset")?.addEventListener("click", () => resetModelPose());
+    addEventListener("keydown", (ev) => {
+      if (!model || ev.target && /input|textarea|select/i.test(ev.target.tagName)) return;
+      if (ev.key === "w" || ev.key === "W") {
+        transformControls.setMode("translate");
+        setModeButtons("translate");
+      } else if (ev.key === "e" || ev.key === "E") {
+        transformControls.setMode("rotate");
+        setModeButtons("rotate");
+      } else if (ev.key === "r" || ev.key === "R") {
+        resetModelPose();
+      }
+    });
+    el("sideView")?.addEventListener("click", () => {
+      setSideView();
+      status.textContent = "侧视 · 拖绿轴调高度";
+    });
+    el("rearView")?.addEventListener("click", () => {
+      setRearView();
+      status.textContent = "尾视 · 把尾喷口拖到红点上";
+    });
+    el("topView")?.addEventListener("click", () => {
+      setTopView();
+      status.textContent = "俯视 · 旋转模式对齐机头机尾";
+    });
+    el("play").onclick = () => {
+      if (!frames.length) return;
+      playing = !playing;
+      holdStill = true;
+      el("play").textContent = playing ? "暂停预览" : "预览播放";
+      playAcc = 0;
+    };
+
+    function resize() {
+      const width = view.clientWidth || 1;
+      const height = view.clientHeight || 1;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+      if (frames.length) showPreviewFrame(selected);
+    }
+    addEventListener("resize", resize);
+    resize();
+
+    let previous = performance.now();
+    function loop(now) {
+      const dt = Math.min((now - previous) / 1000, 0.05);
+      previous = now;
+      if (!frames.length) {
+        if (!AUTO && !holdStill) {
+          const t = now * 0.001;
+          setLiveRoll(Math.sin(t * 0.9) * 35);
+        } else if (holdStill && Math.abs(liveRoll) > 0.01) {
+          setLiveRoll(0);
+        }
+        if (pinView) applyPinView();
+        else controls.update();
+        renderer.render(scene, camera);
+      } else if (playing) {
+        playAcc += dt * 10;
+        while (playAcc >= 1) {
+          playAcc -= 1;
+          selected += playDir;
+          if (selected >= frames.length - 1) {
+            selected = frames.length - 1;
+            playDir = -1;
+          } else if (selected <= 0) {
+            selected = 0;
+            playDir = 1;
+          }
+        }
+        showPreviewFrame(selected);
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

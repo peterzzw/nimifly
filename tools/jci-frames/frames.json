@@ -1,0 +1,114 @@
+{
+  "count": 20,
+  "range": [
+    60,
+    -60
+  ],
+  "size": [
+    1024,
+    1024
+  ],
+  "source": "jci54557246745.fbx",
+  "frames": [
+    {
+      "index": 0,
+      "roll": 60,
+      "file": "frame-00.png"
+    },
+    {
+      "index": 1,
+      "roll": 53.68421052631579,
+      "file": "frame-01.png"
+    },
+    {
+      "index": 2,
+      "roll": 47.368421052631575,
+      "file": "frame-02.png"
+    },
+    {
+      "index": 3,
+      "roll": 41.05263157894737,
+      "file": "frame-03.png"
+    },
+    {
+      "index": 4,
+      "roll": 34.73684210526316,
+      "file": "frame-04.png"
+    },
+    {
+      "index": 5,
+      "roll": 28.42105263157895,
+      "file": "frame-05.png"
+    },
+    {
+      "index": 6,
+      "roll": 22.10526315789474,
+      "file": "frame-06.png"
+    },
+    {
+      "index": 7,
+      "roll": 15.789473684210527,
+      "file": "frame-07.png"
+    },
+    {
+      "index": 8,
+      "roll": 9.473684210526315,
+      "file": "frame-08.png"
+    },
+    {
+      "index": 9,
+      "roll": 3.1578947368421098,
+      "file": "frame-09.png"
+    },
+    {
+      "index": 10,
+      "roll": -3.1578947368421026,
+      "file": "frame-10.png"
+    },
+    {
+      "index": 11,
+      "roll": -9.473684210526315,
+      "file": "frame-11.png"
+    },
+    {
+      "index": 12,
+      "roll": -15.78947368421052,
+      "file": "frame-12.png"
+    },
+    {
+      "index": 13,
+      "roll": -22.10526315789474,
+      "file": "frame-13.png"
+    },
+    {
+      "index": 14,
+      "roll": -28.421052631578945,
+      "file": "frame-14.png"
+    },
+    {
+      "index": 15,
+      "roll": -34.736842105263165,
+      "file": "frame-15.png"
+    },
+    {
+      "index": 16,
+      "roll": -41.05263157894737,
+      "file": "frame-16.png"
+    },
+    {
+      "index": 17,
+      "roll": -47.368421052631575,
+      "file": "frame-17.png"
+    },
+    {
+      "index": 18,
+      "roll": -53.68421052631578,
+      "file": "frame-18.png"
+    },
+    {
+      "index": 19,
+      "roll": -60,
+      "file": "frame-19.png"
+    }
+  ]
+}

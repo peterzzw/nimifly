@@ -1,0 +1,129 @@
+{
+  "description": "项目配置文件",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": true,
+    "minified": true,
+    "newFeature": true,
+    "uglifyFileName": false,
+    "uploadWithSourceMap": true,
+    "enhance": false,
+    "packNpmManually": false,
+    "packNpmRelationList": [],
+    "minifyWXSS": true,
+    "localPlugins": false,
+    "condition": false,
+    "compileWorklet": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    },
+    "disableUseStrict": false,
+    "minifyWXML": true,
+    "useCompilerPlugins": false
+  },
+  "compileType": "game",
+  "libVersion": "latest",
+  "appid": "wxbe76cad0d1801eb1",
+  "projectname": "papa-wx",
+  "condition": {
+    "search": {
+      "current": -1,
+      "list": []
+    },
+    "conversation": {
+      "current": -1,
+      "list": []
+    },
+    "game": {
+      "currentL": -1,
+      "list": []
+    },
+    "miniprogram": {
+      "current": -1,
+      "list": []
+    }
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [
+      {
+        "value": "js/player",
+        "type": "folder"
+      },
+      {
+        "value": "js/npc",
+        "type": "folder"
+      },
+      {
+        "value": "js/runtime",
+        "type": "folder"
+      },
+      {
+        "value": "js/base",
+        "type": "folder"
+      },
+      {
+        "value": "js/libs",
+        "type": "folder"
+      },
+      {
+        "value": "js/main.js",
+        "type": "file"
+      },
+      {
+        "value": "js/render.js",
+        "type": "file"
+      },
+      {
+        "value": "js/databus.js",
+        "type": "file"
+      },
+      {
+        "value": "images",
+        "type": "folder"
+      },
+      {
+        "value": "audio/bgm.mp3",
+        "type": "file"
+      },
+      {
+        "value": "audio/boom.mp3",
+        "type": "file"
+      },
+      {
+        "value": "audio/bullet.mp3",
+        "type": "file"
+      },
+      {
+        "value": "tools",
+        "type": "folder"
+      },
+      {
+        "value": "backup",
+        "type": "folder"
+      },
+      {
+        "value": "agent-transcripts",
+        "type": "folder"
+      },
+      {
+        "value": ".html",
+        "type": "suffix"
+      },
+      {
+        "value": "res/craft-.+-bank-game/frame-.*\\.png",
+        "type": "regexp"
+      },
+      {
+        "value": "package-lock\\.json|\\.md$",
+        "type": "regexp"
+      }
+    ],
+    "include": []
+  },
+  "isGameTourist": false,
+  "editorSetting": {}
+}

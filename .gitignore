@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+**/node_modules/
+
+# local / private
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+
+# local backups (large zips)
+backup/
+
+# heavy 3D source assets (keep export scripts; omit raw FBX)
+tools/models/*.fbx
+tools/models/*.FBX
+
+# python / editor
+__pycache__/
+*.pyc
+.idea/
+.vscode/

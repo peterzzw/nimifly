@@ -1,0 +1,629 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+  <title>操作引导 · 横屏扣洞 Demo</title>
+  <meta name="screen-orientation" content="landscape" />
+  <style>
+    :root {
+      --bg0: #071018;
+      --bg1: #0c1a24;
+      --line: rgba(120, 190, 230, 0.35);
+      --accent: #7dff9a;
+      --accent2: #7ec8ff;
+      --warn: #ffe08a;
+      --muted: #93a8b8;
+      --panel: rgba(6, 14, 22, 0.9);
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-l: env(safe-area-inset-left, 0px);
+      --safe-r: env(safe-area-inset-right, 0px);
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; width: 100%; height: 100%;
+      overflow: hidden;
+      background: #04080e;
+      color: #e8f2f8;
+      font: 14px/1.45 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      user-select: none;
+      touch-action: none;
+    }
+
+    /* 横屏舞台：竖屏时整体旋转 90°，始终按横屏操作 */
+    #phone {
+      position: fixed;
+      left: 50%; top: 50%;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      margin: 0;
+      transform: translate(-50%, -50%);
+      background:
+        radial-gradient(90% 70% at 50% 40%, rgba(40, 90, 120, 0.2), transparent 55%),
+        linear-gradient(180deg, #0a1620 0%, #061018 55%, #04090e 100%);
+      overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(120,180,220,0.12);
+    }
+    @media (orientation: portrait) {
+      #phone {
+        width: 100vh;
+        width: 100dvh;
+        height: 100vw;
+        transform: translate(-50%, -50%) rotate(90deg);
+        transform-origin: center center;
+      }
+    }
+
+    .rotate-tip {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 100;
+      place-items: center;
+      background: rgba(4, 8, 14, 0.92);
+      color: #cfe6f4;
+      font-size: 15px;
+      letter-spacing: 0.08em;
+      pointer-events: none;
+    }
+    /* 已用旋转适配，提示默认关闭；需要强制提示时再打开 */
+    .rotate-tip.force { display: grid; }
+
+    /* —— 假战场背景 —— */
+    .sky {
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse 70% 40% at 50% 110%, rgba(30, 70, 50, 0.35), transparent 60%),
+        radial-gradient(circle at 70% 25%, rgba(90, 160, 200, 0.12), transparent 40%),
+        repeating-linear-gradient(0deg, transparent 0 47px, rgba(80,120,140,0.05) 47px 48px),
+        repeating-linear-gradient(90deg, transparent 0 47px, rgba(80,120,140,0.05) 47px 48px);
+      pointer-events: none;
+    }
+    .craft {
+      position: absolute;
+      left: 50%; top: 46%;
+      width: 0; height: 0;
+      transform: translate(-50%, -50%);
+      filter: drop-shadow(0 0 10px rgba(93, 255, 200, 0.35));
+    }
+    .craft::before {
+      content: "";
+      display: block;
+      width: 0; height: 0;
+      border-left: 14px solid transparent;
+      border-right: 14px solid transparent;
+      border-bottom: 36px solid #5dffc8;
+      transform: translate(-50%, -50%) rotate(0deg);
+      margin-left: 14px;
+    }
+    .status {
+      position: absolute;
+      top: calc(12px + var(--safe-t));
+      left: calc(12px + var(--safe-l));
+      right: calc(12px + var(--safe-r));
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted);
+      pointer-events: none;
+      z-index: 2;
+    }
+    .status strong { color: #cfe6f4; font-weight: 600; }
+
+    /* —— 操作控件（仅展示，不可操作） —— */
+    .ctrl { position: absolute; z-index: 3; pointer-events: none; }
+
+    .weap {
+      top: calc(18px + var(--safe-t));
+      right: calc(16px + var(--safe-r));
+      display: flex; gap: 12px;
+    }
+    .weap button {
+      width: 52px; height: 52px; border-radius: 12px;
+      border: 1.5px solid rgba(140, 200, 230, 0.35);
+      background: rgba(8, 18, 26, 0.75);
+      color: #d8e8f2;
+      font: 700 18px/1 sans-serif;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+    }
+    .weap button.on {
+      border-color: rgba(125, 255, 154, 0.75);
+      background: rgba(40, 120, 80, 0.55);
+      color: #bfffce;
+      box-shadow: 0 0 14px rgba(125, 255, 154, 0.25);
+    }
+    .weap button small {
+      display: block; margin-top: 4px;
+      font: 500 9px/1 sans-serif; color: var(--muted); letter-spacing: 0.04em;
+    }
+    .weap button.on small { color: #9fe0b0; }
+
+    .lever {
+      /* 武器键下方、开火键上方，贴右缘（横屏 HUD） */
+      top: calc(86px + var(--safe-t));
+      right: calc(20px + var(--safe-r));
+      width: 36px; height: min(120px, 28vh);
+      border-radius: 10px;
+      background: rgba(6, 12, 18, 0.78);
+      border: 1.2px solid rgba(140, 180, 210, 0.35);
+      touch-action: none;
+    }
+    .lever-track {
+      position: absolute;
+      left: 50%; top: 14px; bottom: 14px;
+      width: 10px; margin-left: -5px;
+      border-radius: 4px;
+      background: rgba(0,0,0,0.45);
+      overflow: hidden;
+    }
+    .lever-fill {
+      position: absolute; left: 1.5px; right: 1.5px; bottom: 0;
+      border-radius: 3px;
+      background: linear-gradient(180deg, rgba(90,200,255,0.55), rgba(40,120,180,0.12));
+    }
+    .lever-knob {
+      position: absolute;
+      left: 50%; width: 28px; height: 16px;
+      margin-left: -14px;
+      border-radius: 4px;
+      background: linear-gradient(180deg, #d8e6f0, #8aa3b5);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+      transform: translateY(-50%);
+    }
+    .lever-label {
+      position: absolute;
+      right: 42px; top: 50%;
+      transform: translateY(-50%);
+      writing-mode: vertical-rl;
+      font-size: 10px; letter-spacing: 0.2em;
+      color: rgba(180, 210, 230, 0.55);
+      pointer-events: none; white-space: nowrap;
+    }
+
+    .stick, .fire {
+      width: min(99px, 22vh);
+      height: min(99px, 22vh);
+      border-radius: 50%;
+      border: 1.5px solid rgba(140, 190, 220, 0.3);
+      background: rgba(8, 16, 24, 0.45);
+      box-shadow: inset 0 0 24px rgba(0,0,0,0.35);
+    }
+    .stick {
+      left: calc(28px + var(--safe-l));
+      bottom: calc(22px + var(--safe-b));
+    }
+    .fire {
+      right: calc(28px + var(--safe-r));
+      bottom: calc(22px + var(--safe-b));
+    }
+    .stick-pad, .fire-knob {
+      position: absolute;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      left: 50%; top: 50%;
+      margin: -21px 0 0 -21px;
+      background: radial-gradient(circle at 35% 30%, #c8dce8, #6a8498);
+      box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+      transition: transform 0.05s linear;
+    }
+    .fire-knob {
+      background: radial-gradient(circle at 35% 30%, #ffb07a, #c45a3a);
+    }
+    .stick-cap, .fire-cap {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      font-size: 11px; color: rgba(200,220,235,0.55);
+      pointer-events: none; letter-spacing: 0.06em;
+    }
+    .fire.firing .fire-knob {
+      box-shadow: 0 0 16px rgba(255, 140, 60, 0.65);
+      transform: scale(0.92) translate(var(--dx, 0), var(--dy, 0));
+    }
+
+    .toast {
+      position: absolute;
+      left: 50%; bottom: calc(28px + var(--safe-b));
+      transform: translateX(-50%);
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.45);
+      color: #b8d0de;
+      font-size: 12px;
+      opacity: 0;
+      transition: opacity 0.25s;
+      pointer-events: none;
+      z-index: 4;
+    }
+    .toast.show { opacity: 1; }
+
+    /* —— 扣洞遮罩 —— */
+    #mask {
+      position: absolute; inset: 0;
+      z-index: 20;
+      pointer-events: none;
+    }
+    #mask canvas {
+      width: 100%; height: 100%;
+      display: block;
+    }
+    #mask.pass-through { pointer-events: none; }
+    #mask.block { pointer-events: auto; }
+
+    .coach {
+      position: absolute;
+      z-index: 30;
+      left: 50%;
+      top: calc(14px + var(--safe-t));
+      transform: translateX(-50%);
+      width: min(420px, calc(100% - 200px));
+      max-width: calc(100% - 40px);
+      padding: 12px 14px 10px;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1.2px solid var(--line);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+      pointer-events: auto;
+    }
+    .coach h2 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      color: var(--warn);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .coach h2 span {
+      font-size: 11px;
+      font-weight: 500;
+      color: rgba(200,214,226,0.5);
+    }
+    .coach p {
+      margin: 0 0 10px;
+      font-size: 12.5px;
+      color: #d5e2ea;
+      min-height: 2.4em;
+    }
+    .coach .row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    .coach button {
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(180,200,220,0.35);
+      background: rgba(255,255,255,0.08);
+      color: #c8d4e0;
+      font-size: 12px;
+      padding: 0 14px;
+      cursor: pointer;
+    }
+    .coach button.primary {
+      min-width: 110px;
+      border: none;
+      background: rgba(60, 160, 110, 0.92);
+      color: #06200a;
+      font-weight: 700;
+    }
+    .coach button:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+
+    .done-panel {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      place-items: center;
+      background: rgba(4, 10, 16, 0.72);
+      backdrop-filter: blur(4px);
+    }
+    .done-panel.show { display: grid; }
+    .done-card {
+      width: min(300px, calc(100% - 40px));
+      padding: 22px 18px 16px;
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      text-align: center;
+    }
+    .done-card h3 { margin: 0 0 8px; color: var(--accent); font-size: 18px; }
+    .done-card p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+    .done-card button {
+      height: 36px; min-width: 120px;
+      border: none; border-radius: 9px;
+      background: rgba(60, 160, 110, 0.95);
+      color: #06200a; font-weight: 700; font-size: 13px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="phone">
+    <div class="sky"></div>
+    <div class="craft" id="craft"></div>
+    <div class="status">
+      <div>训练场 · <strong id="spdRead">油门 0%</strong></div>
+      <div id="weapRead">主武器 · 机炮</div>
+    </div>
+
+    <div class="ctrl weap" id="weapGroup" data-focus="weapon">
+      <button type="button" id="weapA" class="on" aria-label="主武器">A<small>主武器</small></button>
+      <button type="button" id="weapB" aria-label="副武器">B<small>副武器</small></button>
+    </div>
+
+    <div class="ctrl lever" id="lever" data-focus="lever" aria-label="加速推杆">
+      <div class="lever-label">加速</div>
+      <div class="lever-track"><div class="lever-fill" id="leverFill"></div></div>
+      <div class="lever-knob" id="leverKnob"></div>
+    </div>
+
+    <div class="ctrl stick" id="stick" data-focus="stick" aria-label="飞行方向">
+      <div class="stick-cap">方向</div>
+      <div class="stick-pad" id="stickPad"></div>
+    </div>
+
+    <div class="ctrl fire" id="fire" data-focus="fire" aria-label="开火">
+      <div class="fire-cap">开火</div>
+      <div class="fire-knob" id="fireKnob"></div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <div id="mask" class="block"><canvas id="hole"></canvas></div>
+
+    <div class="coach" id="coach">
+      <h2 id="coachTitle">标题 <span id="coachStep">1 / 4</span></h2>
+      <p id="coachBody"></p>
+      <div class="row">
+        <button type="button" id="btnSkip">跳过</button>
+        <button type="button" class="primary" id="btnNext">下一步</button>
+      </div>
+    </div>
+
+    <div class="done-panel" id="done">
+      <div class="done-card">
+        <h3>引导完成</h3>
+        <p>操作介绍看完了。可再看一遍，或关闭。</p>
+        <button type="button" id="btnReplay">再看一遍</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (() => {
+      const STEPS = [
+        {
+          id: "lever",
+          title: "① 加速推杆",
+          body: "右侧竖杆是油门。上推加速、下拉减速，松手停在当前档位。",
+          pad: 10,
+          radius: 12,
+        },
+        {
+          id: "weapon",
+          title: "② 切换武器",
+          body: "右上角 A / B 是两套武器。点 A 用主武器，点 B 用副武器（导弹、激光等）。",
+          pad: 8,
+          radius: 14,
+        },
+        {
+          id: "fire",
+          title: "③ 发射弹药",
+          body: "右下角是开火键：按住连续射击，松开停止；按住拖动可调整开火方向。",
+          pad: 12,
+          radius: 50,
+        },
+        {
+          id: "stick",
+          title: "④ 飞行方向手柄",
+          body: "左下角是方向摇杆。按住拖动可转向；油门管速度，摇杆只管朝向。",
+          pad: 12,
+          radius: 50,
+        },
+      ];
+
+      const phone = document.getElementById("phone");
+      const canvas = document.getElementById("hole");
+      const ctx = canvas.getContext("2d");
+      const mask = document.getElementById("mask");
+      const coach = document.getElementById("coach");
+      const coachTitle = document.getElementById("coachTitle");
+      const coachStep = document.getElementById("coachStep");
+      const coachBody = document.getElementById("coachBody");
+      const btnNext = document.getElementById("btnNext");
+      const btnSkip = document.getElementById("btnSkip");
+      const done = document.getElementById("done");
+
+      const lever = document.getElementById("lever");
+      const leverKnob = document.getElementById("leverKnob");
+      const leverFill = document.getElementById("leverFill");
+      const weapGroup = document.getElementById("weapGroup");
+      const stick = document.getElementById("stick");
+      const fire = document.getElementById("fire");
+
+      let step = 0;
+      let guiding = true;
+      let pulseT = 0;
+
+      function focusEl(id) {
+        if (id === "weapon") return weapGroup;
+        if (id === "lever") return lever;
+        if (id === "fire") return fire;
+        if (id === "stick") return stick;
+        return null;
+      }
+
+      function isPortrait() {
+        return window.matchMedia("(orientation: portrait)").matches;
+      }
+
+      function localPointFromClient(clientX, clientY) {
+        const r = phone.getBoundingClientRect();
+        const lw = phone.clientWidth;
+        const lh = phone.clientHeight;
+        if (!isPortrait()) {
+          return { x: clientX - r.left, y: clientY - r.top };
+        }
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height / 2;
+        return {
+          x: lw / 2 + (clientY - cy),
+          y: lh / 2 - (clientX - cx),
+        };
+      }
+
+      function holeRect(el, pad) {
+        const r = el.getBoundingClientRect();
+        const a = localPointFromClient(r.left, r.top);
+        const b = localPointFromClient(r.right, r.bottom);
+        const x1 = Math.min(a.x, b.x);
+        const y1 = Math.min(a.y, b.y);
+        const x2 = Math.max(a.x, b.x);
+        const y2 = Math.max(a.y, b.y);
+        return {
+          x: x1 - pad,
+          y: y1 - pad,
+          w: (x2 - x1) + pad * 2,
+          h: (y2 - y1) + pad * 2,
+        };
+      }
+
+      function paintLeverDemo() {
+        const v = 0.55;
+        const travelTop = 14;
+        const travelH = Math.max(40, lever.clientHeight - 28);
+        const y = travelTop + (1 - v) * travelH;
+        leverKnob.style.top = y + "px";
+        leverFill.style.height = Math.max(0, (lever.clientHeight - 14) - y) + "px";
+      }
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const w = phone.clientWidth;
+        const h = phone.clientHeight;
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        canvas.style.width = w + "px";
+        canvas.style.height = h + "px";
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        paintLeverDemo();
+        drawMask();
+      }
+
+      function roundRectPath(g, x, y, w, h, r) {
+        const rr = Math.min(r, w / 2, h / 2);
+        g.beginPath();
+        g.moveTo(x + rr, y);
+        g.arcTo(x + w, y, x + w, y + h, rr);
+        g.arcTo(x + w, y + h, x, y + h, rr);
+        g.arcTo(x, y + h, x, y, rr);
+        g.arcTo(x, y, x + w, y, rr);
+        g.closePath();
+      }
+
+      function drawMask() {
+        const w = phone.clientWidth;
+        const h = phone.clientHeight;
+        ctx.clearRect(0, 0, w, h);
+        if (!guiding) return;
+
+        const info = STEPS[step];
+        const el = focusEl(info.id);
+        const box = holeRect(el, info.pad);
+        const pulse = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(pulseT / 200));
+
+        ctx.fillStyle = "rgba(4, 10, 16, 0.72)";
+        ctx.fillRect(0, 0, w, h);
+
+        ctx.globalCompositeOperation = "destination-out";
+        if (info.id === "fire" || info.id === "stick") {
+          const cx = box.x + box.w / 2;
+          const cy = box.y + box.h / 2;
+          const rad = Math.max(box.w, box.h) / 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          roundRectPath(ctx, box.x, box.y, box.w, box.h, info.radius);
+          ctx.fill();
+        }
+        ctx.globalCompositeOperation = "source-over";
+
+        ctx.save();
+        ctx.globalAlpha = 0.35 + pulse * 0.5;
+        ctx.strokeStyle = info.id === "lever" ? "#7ec8ff" : "#7dff9a";
+        ctx.lineWidth = 3;
+        if (info.id === "fire" || info.id === "stick") {
+          const cx = box.x + box.w / 2;
+          const cy = box.y + box.h / 2;
+          const rad = Math.max(box.w, box.h) / 2;
+          ctx.beginPath();
+          ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          roundRectPath(ctx, box.x - 2, box.y - 2, box.w + 4, box.h + 4, info.radius + 2);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function refreshCoach() {
+        const info = STEPS[step];
+        coachTitle.childNodes[0].nodeValue = info.title + " ";
+        coachStep.textContent = (step + 1) + " / " + STEPS.length;
+        coachBody.textContent = info.body;
+        btnNext.textContent = step >= STEPS.length - 1 ? "完成" : "下一步";
+        drawMask();
+      }
+
+      function advance() {
+        if (step >= STEPS.length - 1) {
+          finishGuide();
+          return;
+        }
+        step += 1;
+        refreshCoach();
+      }
+
+      function finishGuide() {
+        guiding = false;
+        mask.style.display = "none";
+        coach.style.display = "none";
+        done.classList.add("show");
+      }
+
+      function startGuide() {
+        step = 0;
+        guiding = true;
+        mask.style.display = "block";
+        coach.style.display = "block";
+        done.classList.remove("show");
+        paintLeverDemo();
+        refreshCoach();
+      }
+
+      btnNext.addEventListener("click", advance);
+      btnSkip.addEventListener("click", finishGuide);
+      document.getElementById("btnReplay").addEventListener("click", startGuide);
+
+      function tick(now) {
+        pulseT = now;
+        if (guiding) drawMask();
+        requestAnimationFrame(tick);
+      }
+
+      window.addEventListener("resize", resize);
+      window.addEventListener("orientationchange", () => setTimeout(resize, 120));
+      resize();
+      startGuide();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

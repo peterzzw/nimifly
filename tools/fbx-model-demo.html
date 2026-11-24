@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>FBX 飞机模型 Demo</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #060a0f;
+      --panel: rgba(10, 17, 25, .9);
+      --line: #263644;
+      --cyan: #54d5ff;
+      --muted: #8395a3;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { background: var(--bg); color: #e9f3f8; font: 13px system-ui, "Microsoft YaHei", sans-serif; }
+    #view { position: fixed; inset: 0; }
+    canvas { display: block; width: 100%; height: 100%; }
+    .panel {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      z-index: 2;
+      width: 286px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: 0 16px 45px rgba(0,0,0,.35);
+      backdrop-filter: blur(10px);
+    }
+    h1 { margin: 0 0 4px; font-size: 18px; letter-spacing: .04em; }
+    h1 b { color: var(--cyan); }
+    .file { margin-bottom: 14px; color: var(--muted); font: 11px/1.4 ui-monospace, Consolas, monospace; }
+    .status {
+      margin-bottom: 14px;
+      padding: 9px 10px;
+      border: 1px solid #213440;
+      border-radius: 6px;
+      color: #a9deef;
+      background: #07111a;
+      font: 12px ui-monospace, Consolas, monospace;
+    }
+    .progress {
+      height: 4px;
+      margin-top: 8px;
+      overflow: hidden;
+      border-radius: 5px;
+      background: #182b36;
+    }
+    .progress i {
+      display: block;
+      width: 0;
+      height: 100%;
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+      transition: width .15s;
+    }
+    .field { margin: 12px 0; }
+    .field div { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    label { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+    output { color: var(--cyan); font: 11px ui-monospace, monospace; }
+    input[type="range"] {
+      appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 6px;
+      background: #263744;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 15px;
+      height: 15px;
+      border: 2px solid #07131b;
+      border-radius: 50%;
+      background: var(--cyan);
+      cursor: pointer;
+    }
+    .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 14px; }
+    button {
+      height: 32px;
+      border: 1px solid #315064;
+      border-radius: 6px;
+      color: #dceaf0;
+      background: #122431;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.on { color: #051219; border-color: var(--cyan); background: var(--cyan); }
+    .hint {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 2;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--muted);
+      background: rgba(7,12,18,.8);
+      font-size: 11px;
+      pointer-events: none;
+    }
+    @media (max-width: 640px) {
+      .panel { top: 8px; left: 8px; width: 250px; padding: 12px; }
+      .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="view"></div>
+  <aside class="panel">
+    <h1>FBX <b>MODEL VIEWER</b></h1>
+    <div class="file">imported-aircraft.fbx · 49.6 MB</div>
+    <div class="status">
+      <span id="status">正在载入模型…</span>
+      <div class="progress"><i id="progress"></i></div>
+    </div>
+
+    <div class="field">
+      <div><label>ROLL</label><output id="rollValue">0°</output></div>
+      <input id="roll" type="range" min="-60" max="60" value="0" />
+    </div>
+    <div class="field">
+      <div><label>YAW</label><output id="yawValue">0°</output></div>
+      <input id="yaw" type="range" min="-180" max="180" value="0" />
+    </div>
+    <div class="field">
+      <div><label>PITCH</label><output id="pitchValue">0°</output></div>
+      <input id="pitch" type="range" min="-90" max="90" value="0" />
+    </div>
+
+    <div class="buttons">
+      <button id="reset">复位视角</button>
+      <button id="top">正俯视</button>
+      <button id="auto" class="on">自动旋转</button>
+      <button id="wire">线框模式</button>
+    </div>
+  </aside>
+  <div class="hint">左键旋转 · 滚轮缩放 · 右键平移</div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { FBXLoader } from "three/addons/loaders/FBXLoader.js";
+
+    const el = (id) => document.getElementById(id);
+    const view = el("view");
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060a0f);
+    scene.fog = new THREE.FogExp2(0x060a0f, 0.022);
+
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.01, 1000);
+    camera.position.set(8, 5.5, 9);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      preserveDrawingBuffer: true,
+    });
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.15;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    view.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = .07;
+    controls.target.set(0, 0.4, 0);
+
+    scene.add(new THREE.HemisphereLight(0xb8dbf2, 0x151b20, 1.4));
+    const key = new THREE.DirectionalLight(0xffffff, 3.0);
+    key.position.set(-5, 9, 7);
+    key.castShadow = true;
+    scene.add(key);
+    const rim = new THREE.DirectionalLight(0x55bbff, 2.2);
+    rim.position.set(7, 4, -5);
+    scene.add(rim);
+
+    const floor = new THREE.Mesh(
+      new THREE.CircleGeometry(13, 96),
+      new THREE.MeshStandardMaterial({ color: 0x0b151d, metalness: .15, roughness: .88 })
+    );
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -2.25;
+    floor.receiveShadow = true;
+    scene.add(floor);
+
+    const grid = new THREE.GridHelper(26, 26, 0x2f6680, 0x152934);
+    grid.position.y = -2.24;
+    scene.add(grid);
+
+    const modelRoot = new THREE.Group();
+    scene.add(modelRoot);
+    let model = null;
+    let autoRotate = true;
+    let wireframe = false;
+    let triangles = 0;
+    let meshes = 0;
+
+    function fitModel(object) {
+      object.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(object);
+      const size = box.getSize(new THREE.Vector3());
+      const center = box.getCenter(new THREE.Vector3());
+      const maxSide = Math.max(size.x, size.y, size.z) || 1;
+      const scale = 6 / maxSide;
+      object.scale.setScalar(scale);
+      object.position.set(-center.x * scale, -center.y * scale, -center.z * scale);
+      object.updateMatrixWorld(true);
+
+      const fitted = new THREE.Box3().setFromObject(object);
+      const fittedCenter = fitted.getCenter(new THREE.Vector3());
+      object.position.y -= fittedCenter.y;
+      floor.position.y = fitted.min.y - .15;
+      grid.position.y = fitted.min.y - .14;
+      controls.target.set(0, 0, 0);
+      camera.position.set(7.5, 4.8, 8.5);
+      controls.update();
+    }
+
+    function updateModelRotation() {
+      modelRoot.rotation.order = "YXZ";
+      modelRoot.rotation.z = THREE.MathUtils.degToRad(+el("roll").value);
+      modelRoot.rotation.y = THREE.MathUtils.degToRad(+el("yaw").value);
+      modelRoot.rotation.x = THREE.MathUtils.degToRad(+el("pitch").value);
+      el("rollValue").textContent = `${el("roll").value}°`;
+      el("yawValue").textContent = `${el("yaw").value}°`;
+      el("pitchValue").textContent = `${el("pitch").value}°`;
+    }
+
+    new FBXLoader().load(
+      "./models/imported-aircraft.fbx",
+      (object) => {
+        model = object;
+        triangles = 0;
+        meshes = 0;
+        object.traverse((node) => {
+          if (!node.isMesh) return;
+          meshes++;
+          node.castShadow = true;
+          node.receiveShadow = true;
+          const geometry = node.geometry;
+          triangles += geometry.index
+            ? geometry.index.count / 3
+            : geometry.attributes.position.count / 3;
+          const materials = Array.isArray(node.material) ? node.material : [node.material];
+          for (const material of materials) {
+            if (!material) continue;
+            material.side = THREE.DoubleSide;
+            material.needsUpdate = true;
+          }
+        });
+        fitModel(object);
+        modelRoot.add(object);
+        el("progress").style.width = "100%";
+        el("status").textContent =
+          `完成 · ${meshes} meshes · ${Math.round(triangles).toLocaleString()} tris`;
+        window.captureFbxRollFrame = (angle) => {
+          const oldBackground = scene.background;
+          const oldFloor = floor.visible;
+          const oldGrid = grid.visible;
+          const oldAutoRotate = autoRotate;
+          const oldRootRotation = modelRoot.rotation.clone();
+          const oldCameraPosition = camera.position.clone();
+          const oldCameraUp = camera.up.clone();
+          const oldTarget = controls.target.clone();
+          const oldPixelRatio = renderer.getPixelRatio();
+          const oldSize = new THREE.Vector2();
+          renderer.getSize(oldSize);
+
+          autoRotate = false;
+          scene.background = null;
+          floor.visible = false;
+          grid.visible = false;
+          modelRoot.rotation.order = "YXZ";
+          modelRoot.rotation.set(0, 0, THREE.MathUtils.degToRad(angle));
+          // 游戏帧固定正俯视；只让模型绕纵轴 Roll，避免透视视角看起来像转向。
+          camera.position.set(0, 10, .001);
+          camera.up.set(0, 0, -1);
+          controls.target.set(0, 0, 0);
+          controls.update();
+          camera.aspect = 1;
+          camera.updateProjectionMatrix();
+          renderer.setPixelRatio(1);
+          renderer.setSize(1024, 1024, false);
+          renderer.render(scene, camera);
+          const dataUrl = renderer.domElement.toDataURL("image/png");
+
+          scene.background = oldBackground;
+          floor.visible = oldFloor;
+          grid.visible = oldGrid;
+          autoRotate = oldAutoRotate;
+          modelRoot.rotation.copy(oldRootRotation);
+          camera.position.copy(oldCameraPosition);
+          camera.up.copy(oldCameraUp);
+          controls.target.copy(oldTarget);
+          renderer.setPixelRatio(oldPixelRatio);
+          renderer.setSize(oldSize.x, oldSize.y, false);
+          camera.aspect = oldSize.x / Math.max(1, oldSize.y);
+          camera.updateProjectionMatrix();
+          controls.update();
+          return dataUrl;
+        };
+        window.__fbxReady = true;
+      },
+      (event) => {
+        if (!event.total) {
+          el("status").textContent = `载入中 · ${(event.loaded / 1024 / 1024).toFixed(1)} MB`;
+          return;
+        }
+        const percent = Math.min(100, event.loaded / event.total * 100);
+        el("progress").style.width = `${percent}%`;
+        el("status").textContent = `载入中 · ${percent.toFixed(0)}%`;
+      },
+      (error) => {
+        console.error(error);
+        el("status").textContent = "模型载入失败，请检查控制台";
+        el("progress").style.background = "#ff6376";
+        window.__fbxError = String(error && error.message || error);
+      }
+    );
+
+    ["roll", "yaw", "pitch"].forEach((id) => el(id).addEventListener("input", updateModelRotation));
+
+    el("reset").onclick = () => {
+      el("roll").value = 0;
+      el("yaw").value = 0;
+      el("pitch").value = 0;
+      updateModelRotation();
+      camera.position.set(7.5, 4.8, 8.5);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    };
+    el("top").onclick = () => {
+      camera.position.set(0, 10, .001);
+      camera.up.set(0, 0, -1);
+      controls.target.set(0, 0, 0);
+      controls.update();
+    };
+    el("auto").onclick = () => {
+      autoRotate = !autoRotate;
+      el("auto").classList.toggle("on", autoRotate);
+    };
+    el("wire").onclick = () => {
+      wireframe = !wireframe;
+      el("wire").classList.toggle("on", wireframe);
+      if (!model) return;
+      model.traverse((node) => {
+        if (!node.isMesh) return;
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        materials.forEach((material) => {
+          if (material) material.wireframe = wireframe;
+        });
+      });
+    };
+
+    function resize() {
+      const width = view.clientWidth || 1;
+      const height = view.clientHeight || 1;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+    }
+    addEventListener("resize", resize);
+    resize();
+    updateModelRotation();
+
+    let previous = performance.now();
+    function loop(now) {
+      const dt = Math.min((now - previous) / 1000, .05);
+      previous = now;
+      if (autoRotate && model) modelRoot.rotation.y += dt * .28;
+      controls.update();
+      renderer.render(scene, camera);
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>

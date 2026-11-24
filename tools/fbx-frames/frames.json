@@ -1,0 +1,28 @@
+{
+  "count": 20,
+  "range": [40, -40],
+  "step": -4.2105263158,
+  "size": [1024, 1024],
+  "frames": [
+    {"index": 0, "roll": 40.0, "file": "fbx-roll-00-p40.00.png"},
+    {"index": 1, "roll": 35.7894736842, "file": "fbx-roll-01-p35.79.png"},
+    {"index": 2, "roll": 31.5789473684, "file": "fbx-roll-02-p31.58.png"},
+    {"index": 3, "roll": 27.3684210526, "file": "fbx-roll-03-p27.37.png"},
+    {"index": 4, "roll": 23.1578947368, "file": "fbx-roll-04-p23.16.png"},
+    {"index": 5, "roll": 18.9473684211, "file": "fbx-roll-05-p18.95.png"},
+    {"index": 6, "roll": 14.7368421053, "file": "fbx-roll-06-p14.74.png"},
+    {"index": 7, "roll": 10.5263157895, "file": "fbx-roll-07-p10.53.png"},
+    {"index": 8, "roll": 6.3157894737, "file": "fbx-roll-08-p6.32.png"},
+    {"index": 9, "roll": 2.1052631579, "file": "fbx-roll-09-p2.11.png"},
+    {"index": 10, "roll": -2.1052631579, "file": "fbx-roll-10-m2.11.png"},
+    {"index": 11, "roll": -6.3157894737, "file": "fbx-roll-11-m6.32.png"},
+    {"index": 12, "roll": -10.5263157895, "file": "fbx-roll-12-m10.53.png"},
+    {"index": 13, "roll": -14.7368421053, "file": "fbx-roll-13-m14.74.png"},
+    {"index": 14, "roll": -18.9473684211, "file": "fbx-roll-14-m18.95.png"},
+    {"index": 15, "roll": -23.1578947368, "file": "fbx-roll-15-m23.16.png"},
+    {"index": 16, "roll": -27.3684210526, "file": "fbx-roll-16-m27.37.png"},
+    {"index": 17, "roll": -31.5789473684, "file": "fbx-roll-17-m31.58.png"},
+    {"index": 18, "roll": -35.7894736842, "file": "fbx-roll-18-m35.79.png"},
+    {"index": 19, "roll": -40.0, "file": "fbx-roll-19-m40.00.png"}
+  ]
+}

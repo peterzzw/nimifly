@@ -1,0 +1,7 @@
+.env
+node_modules/
+out/
+*.png
+*.jpg
+*.webp
+!public/**
